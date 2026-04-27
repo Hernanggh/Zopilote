@@ -97,6 +97,32 @@ export default function NewRound() {
     },
   });
 
+  // Pre-fill bet amounts from last round
+  useQuery({
+    queryKey: ['last_round_bets'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('rounds')
+        .select('round_game_config(game_type, bet_amount)')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      const configs = (data as any)?.round_game_config as { game_type: string; bet_amount: number }[] | undefined;
+      if (configs?.length) {
+        setGames(prev => {
+          const next = { ...prev };
+          configs.forEach(c => {
+            if (next[c.game_type as GameKey]) {
+              next[c.game_type as GameKey] = { ...next[c.game_type as GameKey], bet_amount: c.bet_amount };
+            }
+          });
+          return next;
+        });
+      }
+      return null;
+    },
+  });
+
   const courseName = courses.find(c => c.id === courseId)?.name ?? 'Seleccionar campo';
   const availablePlayers = allPlayers.filter(p => !players.find(rp => rp.player_id === p.id));
 
@@ -156,7 +182,7 @@ export default function NewRound() {
 
       const { data: round, error: roundErr } = await supabase
         .from('rounds')
-        .insert({ course_id: courseId, start_hole: startHole, created_by: user.id, status: 'active' })
+        .insert({ course_id: courseId, start_hole: startHole, created_by: user.id, status: 'active', date: new Date().toLocaleDateString('en-CA') })
         .select('id')
         .single();
       if (roundErr) throw roundErr;

@@ -171,7 +171,7 @@ export default function PlayersScreen() {
         <Text style={{ color: Colors.white, fontSize: 16, fontWeight: '700' }}>Nuevo Jugador</Text>
       </Pressable>
 
-      <PlayerModal visible={modalVisible} player={editPlayer} onClose={closeModal} />
+      <PlayerModal key={editPlayer?.id ?? 'new'} visible={modalVisible} player={editPlayer} onClose={closeModal} />
     </View>
   );
 }

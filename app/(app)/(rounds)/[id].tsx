@@ -311,7 +311,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                           style={{
                             width: 42,
                             height: 38,
-                            backgroundColor: readonly ? Colors.background : ventaja ? '#FFFF0066' : grossMap[p.player_id]?.[holeNum] ? Colors.greenLight + '33' : Colors.background,
+                            backgroundColor: readonly ? Colors.background : ventaja ? '#FFFF0066' : getValue(p.player_id, holeNum) ? Colors.greenLight + '33' : Colors.background,
                             borderRadius: 8,
                             textAlign: 'center',
                             fontSize: 16,
@@ -339,7 +339,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                         style={{
                           width: 40,
                           height: 38,
-                          backgroundColor: marcasEspMap[p.player_id]?.[holeNum] ? Colors.gold + '33' : Colors.background,
+                          backgroundColor: getMarcaValue(p.player_id, holeNum) ? Colors.gold + '33' : Colors.background,
                           borderRadius: 8,
                           textAlign: 'center',
                           fontSize: 13,
@@ -443,8 +443,9 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
     ? calcMarcas(netMap, playerIds, holeOrder)
     : null;
 
+  const playerHandicaps = players.map(p => ({ id: p.player_id, handicap: p.handicap }));
   const individualResults = gameConfigs.individuales?.active || gameConfigs.individuales_medal?.active
-    ? calcIndividualAll(playerIds, netMap, holeOrder, gameConfigs.presiones?.active ?? false)
+    ? calcIndividualAll(playerIds, grossMap, holeOrder, gameConfigs.presiones?.active ?? false, playerHandicaps, holes)
     : [];
 
   const pairings: Pairing[] = round.round_pairings;
@@ -469,7 +470,7 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
     { key: 'total'   as const, label: 'Total',     bg: '#F0FFF4' },
   ];
 
-  function valStr(v: number) { return v > 0 ? `+${v}` : v === 0 ? 'AS' : String(v); }
+  function valStr(v: number) { return v > 0 ? `+${v}` : v === 0 ? '0' : String(v); }
   function valColor(v: number) { return v > 0 ? Colors.success : v < 0 ? Colors.error : Colors.textSecondary; }
 
   // Individual result lookup by "playerA_playerB"
@@ -513,11 +514,11 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
   const pairIds = [...new Set(parejasResults.flatMap(m => [m.pairA, m.pairB]))].sort((a, b) => a - b);
   const pairName = (num: number) => {
     if (num === 0 && basePairData) {
-      return `${nameMap[basePairData.player1_id]?.split(' ')[0]}/${nameMap[basePairData.player2_id]?.split(' ')[0]}`;
+      return `${nameMap[basePairData.player1_id]?.split(' ')[0]}\n${nameMap[basePairData.player2_id]?.split(' ')[0]}`;
     }
     const pair = pairings.find(p => p.pair_number === num);
     if (!pair) return `P${num}`;
-    return `${nameMap[pair.player1_id]?.split(' ')[0]}/${nameMap[pair.player2_id]?.split(' ')[0]}`;
+    return `${nameMap[pair.player1_id]?.split(' ')[0]}\n${nameMap[pair.player2_id]?.split(' ')[0]}`;
   };
 
   const CELL_BORDER = { borderLeftWidth: 1, borderColor: Colors.border + '44' } as const;
@@ -582,10 +583,10 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
                           <View key={colId} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, ...CELL_BORDER }}>
                             {cell ? (
                               <View style={{ alignItems: 'center', gap: 1 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '800', color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontSize: 13, color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.match)}
                                 </Text>
-                                <Text style={{ fontSize: 11, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontSize: 13, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.medal)}
                                 </Text>
                                 {cell.presiones > 0 && (
@@ -647,10 +648,10 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
                           <View key={colPair} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, ...CELL_BORDER }}>
                             {cell ? (
                               <View style={{ alignItems: 'center', gap: 1 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '800', color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontSize: 13, color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.match)}
                                 </Text>
-                                <Text style={{ fontSize: 11, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontSize: 13, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.medal)}
                                 </Text>
                               </View>
@@ -697,10 +698,10 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
                     return (
                       <View key={m.pairB} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, ...CELL_BORDER }}>
                         <View style={{ alignItems: 'center', gap: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '800', color: valColor(match), fontVariant: ['tabular-nums'] }}>
+                          <Text style={{ fontSize: 13, color: valColor(match), fontVariant: ['tabular-nums'] }}>
                             {valStr(match)}
                           </Text>
-                          <Text style={{ fontSize: 11, color: valColor(medal), fontVariant: ['tabular-nums'] }}>
+                          <Text style={{ fontSize: 13, color: valColor(medal), fontVariant: ['tabular-nums'] }}>
                             {valStr(medal)}
                           </Text>
                         </View>
@@ -748,7 +749,8 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   players.forEach(p => { nameMap[p.player_id] = p.players.name; });
 
   const marcas = calcMarcas(netMap, playerIds, holeOrder);
-  const individualResults = calcIndividualAll(playerIds, netMap, holeOrder, gameConfigs.presiones?.active ?? false);
+  const playerHandicaps = players.map(p => ({ id: p.player_id, handicap: p.handicap }));
+  const individualResults = calcIndividualAll(playerIds, grossMap, holeOrder, gameConfigs.presiones?.active ?? false, playerHandicaps, holes);
   const pairings: Pairing[] = round.round_pairings;
   const parejasResults = pairings.length >= 2 ? calcParejas(pairings, netMap, holeOrder) : [];
   const basePairData = round.round_base_pair?.[0] ?? null;
@@ -773,7 +775,7 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
     return { ...row, marcas_esp: marcasEspAmt, total: row.total + marcasEspAmt };
   });
 
-  function fmt(n: number) { return (n >= 0 ? '+' : '') + `$${Math.abs(n).toLocaleString('es-MX')}`; }
+  function fmt(n: number) { return (n >= 0 ? '+' : '-') + `$${Math.abs(n).toLocaleString('es-MX')}`; }
   function color(n: number) { return n > 0 ? Colors.success : n < 0 ? Colors.error : Colors.textSecondary; }
 
   // Columnas consolidadas: agrupa juegos relacionados

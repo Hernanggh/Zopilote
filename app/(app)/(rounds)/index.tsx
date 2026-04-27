@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -18,6 +19,8 @@ const STATUS_COLOR: Record<string, string> = { active: Colors.success, setup: Co
 
 export default function RoundsHome() {
   const router = useRouter();
+  const [deleteTarget, setDeleteTarget] = useState<Round | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: rounds = [], isLoading, refetch } = useQuery<Round[]>({
     queryKey: ['rounds'],
@@ -43,6 +46,15 @@ export default function RoundsHome() {
     if (group.length <= 1) return dateStr;
     const idx = group.indexOf(item.id) + 1;
     return idx <= 1 ? dateStr : `${dateStr} #${idx}`;
+  }
+
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    await supabase.from('rounds').delete().eq('id', deleteTarget.id);
+    setDeleting(false);
+    setDeleteTarget(null);
+    refetch();
   }
 
   return (
@@ -85,23 +97,33 @@ export default function RoundsHome() {
             </View>
           }
           renderItem={({ item }) => (
-            <Link href={`/${item.id}` as any} asChild>
-              <Pressable style={{ backgroundColor: Colors.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>
-                    {roundName(item)}
+            <Pressable
+              onPress={() => router.push(`/${item.id}` as any)}
+              style={{ backgroundColor: Colors.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 6 }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                  {roundName(item)}
+                </Text>
+                <View style={{ backgroundColor: STATUS_COLOR[item.status] + '22', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: STATUS_COLOR[item.status] }}>
+                    {STATUS_LABEL[item.status]}
                   </Text>
-                  <View style={{ backgroundColor: STATUS_COLOR[item.status] + '22', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: STATUS_COLOR[item.status] }}>
-                      {STATUS_LABEL[item.status]}
-                    </Text>
-                  </View>
                 </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ fontSize: 13, color: Colors.textSecondary }}>
                   {item.courses?.name ?? 'Campo'}{' · '}Hoyo {item.start_hole}
                 </Text>
-              </Pressable>
-            </Link>
+                <Pressable
+                  onPress={e => { e.stopPropagation(); setDeleteTarget(item); }}
+                  hitSlop={8}
+                  style={{ padding: 4 }}
+                >
+                  <Text style={{ fontSize: 16, color: Colors.textSecondary }}>🗑</Text>
+                </Pressable>
+              </View>
+            </Pressable>
           )}
         />
       )}
@@ -119,6 +141,37 @@ export default function RoundsHome() {
           <Text style={{ color: Colors.white, fontSize: 16, fontWeight: '700' }}>Nueva Partida</Text>
         </Pressable>
       </Link>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+          <View style={{ backgroundColor: Colors.card, borderRadius: 20, padding: 24, marginHorizontal: 32, gap: 12, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.text }}>¿Borrar partida?</Text>
+            <Text style={{ fontSize: 14, color: Colors.textSecondary, lineHeight: 20 }}>
+              Se eliminará "{roundName(deleteTarget)}" y todos sus scores. Esta acción no se puede deshacer.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <Pressable
+                onPress={() => setDeleteTarget(null)}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.background, alignItems: 'center', borderWidth: 1, borderColor: Colors.border }}
+              >
+                <Text style={{ fontWeight: '600', color: Colors.text }}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={doDelete}
+                disabled={deleting}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.error, alignItems: 'center' }}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={{ fontWeight: '700', color: Colors.white }}>Borrar</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

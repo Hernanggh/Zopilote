@@ -227,27 +227,43 @@ function calcVuelta(
 
 export function calcIndividualAll(
   playerIds: string[],
-  netMap: Record<string, Record<number, number>>,
+  grossMap: Record<string, Record<number, number>>,
   holeNumbers: number[],
-  presionesActive: boolean
+  presionesActive: boolean,
+  playerHandicaps: PlayerHandicap[],
+  holes: HoleInfo[]
 ): IndividualResult[] {
   const primera9 = holeNumbers.slice(0, 9);
   const segunda9 = holeNumbers.slice(9);
   const results: IndividualResult[] = [];
+
+  const hcpLookup: Record<string, number> = {};
+  playerHandicaps.forEach(p => { hcpLookup[p.id] = p.handicap; });
 
   for (let i = 0; i < playerIds.length; i++) {
     for (let j = i + 1; j < playerIds.length; j++) {
       const pA = playerIds[i];
       const pB = playerIds[j];
 
-      const primera = calcVuelta(pA, pB, netMap, primera9, presionesActive);
-      const segunda = calcVuelta(pA, pB, netMap, segunda9, presionesActive);
+      // Handicap relativo LOCAL entre estos dos jugadores
+      const localHcps = calcRelativeHandicaps([
+        { id: pA, handicap: hcpLookup[pA] ?? 0 },
+        { id: pB, handicap: hcpLookup[pB] ?? 0 },
+      ]);
+      const pairScores = holeNumbers.flatMap(h => [
+        { player_id: pA, hole_number: h, gross_score: grossMap[pA]?.[h] ?? 0 },
+        { player_id: pB, hole_number: h, gross_score: grossMap[pB]?.[h] ?? 0 },
+      ]).filter(s => s.gross_score > 0);
+      const localNetMap = buildNetScoreMap(pairScores, localHcps, holes);
+
+      const primera = calcVuelta(pA, pB, localNetMap, primera9, presionesActive);
+      const segunda = calcVuelta(pA, pB, localNetMap, segunda9, presionesActive);
 
       // Total: sin presiones, calculado sobre los 18 hoyos
       let totalMatchAccum = 0, totalMedalA = 0, totalMedalB = 0;
       for (const hole of holeNumbers) {
-        const netA = netMap[pA]?.[hole];
-        const netB = netMap[pB]?.[hole];
+        const netA = localNetMap[pA]?.[hole];
+        const netB = localNetMap[pB]?.[hole];
         if (netA === undefined || netB === undefined) continue;
         totalMatchAccum += netA < netB ? 1 : netA > netB ? -1 : 0;
         totalMedalA += netA;
