@@ -430,7 +430,7 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
   players.forEach(p => { nameMap[p.player_id] = p.players.name; });
 
   const marcas = gameConfigs.marcas?.active
-    ? calcMarcas(netMap, playerIds, holeOrder.filter(h => holeOrder.indexOf(h) !== -1))
+    ? calcMarcas(netMap, playerIds, holeOrder)
     : null;
 
   const individualResults = gameConfigs.individuales?.active || gameConfigs.individuales_medal?.active
@@ -450,13 +450,73 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
     ? calcParejaBase(basePairData, otherPairings, netMap, holeOrder)
     : [];
 
-  function signColor(v: number) { return v > 0 ? Colors.success : v < 0 ? Colors.error : Colors.textSecondary; }
-  function signStr(v: number) { return v > 0 ? `+${v}` : String(v); }
+  const COL_W = 54;
+  const ROW_H_W = 74;
+
+  const SECTIONS = [
+    { key: 'primera' as const, label: '1ª Vuelta', bg: '#FFF5F5' },
+    { key: 'segunda' as const, label: '2ª Vuelta', bg: '#F5F5FF' },
+    { key: 'total'   as const, label: 'Total',     bg: '#F0FFF4' },
+  ];
+
+  function valStr(v: number) { return v > 0 ? `+${v}` : v === 0 ? 'AS' : String(v); }
+  function valColor(v: number) { return v > 0 ? Colors.success : v < 0 ? Colors.error : Colors.textSecondary; }
+
+  // Individual result lookup by "playerA_playerB"
+  const indLookup = new Map<string, typeof individualResults[0]>();
+  individualResults.forEach(r => { indLookup.set(`${r.playerA}_${r.playerB}`, r); });
+
+  function indCell(rowId: string, colId: string, vuelta: 'primera' | 'segunda' | 'total') {
+    const direct = indLookup.get(`${rowId}_${colId}`);
+    if (direct) {
+      const v = direct[vuelta];
+      const pCount = vuelta !== 'total' ? (direct[vuelta] as any).presiones.length : 0;
+      return { match: v.matchAccum, medal: v.medalB - v.medalA, presiones: pCount as number };
+    }
+    const inverse = indLookup.get(`${colId}_${rowId}`);
+    if (inverse) {
+      const v = inverse[vuelta];
+      const pCount = vuelta !== 'total' ? (inverse[vuelta] as any).presiones.length : 0;
+      return { match: -v.matchAccum, medal: v.medalA - v.medalB, presiones: pCount as number };
+    }
+    return null;
+  }
+
+  // Parejas result lookup by "pairA_pairB"
+  const parLookup = new Map<string, typeof parejasResults[0]>();
+  parejasResults.forEach(m => { parLookup.set(`${m.pairA}_${m.pairB}`, m); });
+
+  function parCell(rowPair: number, colPair: number, vuelta: 'primera' | 'segunda' | 'total') {
+    const direct = parLookup.get(`${rowPair}_${colPair}`);
+    if (direct) {
+      const v = direct[vuelta];
+      return { match: v.matchAccum, medal: v.medalB - v.medalA };
+    }
+    const inverse = parLookup.get(`${colPair}_${rowPair}`);
+    if (inverse) {
+      const v = inverse[vuelta];
+      return { match: -v.matchAccum, medal: v.medalA - v.medalB };
+    }
+    return null;
+  }
+
+  const pairIds = [...new Set(parejasResults.flatMap(m => [m.pairA, m.pairB]))].sort((a, b) => a - b);
+  const pairName = (num: number) => {
+    if (num === 0 && basePairData) {
+      return `${nameMap[basePairData.player1_id]?.split(' ')[0]}/${nameMap[basePairData.player2_id]?.split(' ')[0]}`;
+    }
+    const pair = pairings.find(p => p.pair_number === num);
+    if (!pair) return `P${num}`;
+    return `${nameMap[pair.player1_id]?.split(' ')[0]}/${nameMap[pair.player2_id]?.split(' ')[0]}`;
+  };
+
+  const CELL_BORDER = { borderLeftWidth: 1, borderColor: Colors.border + '44' } as const;
+  const DIAG_BG = Colors.textSecondary + '22';
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }} contentInsetAdjustmentBehavior="automatic">
 
-      {/* Marcas */}
+      {/* Marcas / Plumas */}
       {marcas && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🦚 Marcas / Plumas</Text>
@@ -473,137 +533,174 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
         </View>
       )}
 
-      {/* Individual */}
+      {/* Individuales — matriz N×N */}
       {individualResults.length > 0 && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏌️ Individuales</Text>
-          {individualResults.map(r => {
-            const vueltas = [
-              { label: '1ª Vuelta', v: r.primera },
-              { label: '2ª Vuelta', v: r.segunda },
-              { label: 'Total',     v: r.total    },
-            ] as const;
-            const allPresiones = [...r.primera.presiones, ...r.segunda.presiones];
-            return (
-              <View key={r.matchup} style={{ backgroundColor: Colors.card, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
-                <View style={{ backgroundColor: Colors.greenDark + '22', padding: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text }}>
-                    {nameMap[r.playerA]} vs {nameMap[r.playerB]}
-                  </Text>
-                  {allPresiones.length > 0 && (
-                    <Text style={{ fontSize: 12, color: Colors.warning, fontWeight: '700' }}>
-                      {allPresiones.length}P
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+              {/* Column headers */}
+              <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
+                <View style={{ width: ROW_H_W, padding: 8 }} />
+                {playerIds.map(id => (
+                  <View key={id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                      {nameMap[id]?.split(' ')[0]}
                     </Text>
-                  )}
-                </View>
-                {/* Header row */}
-                <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: 1, borderColor: Colors.border }}>
-                  <Text style={{ flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}> </Text>
-                  <Text style={{ width: 60, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MATCH</Text>
-                  <Text style={{ flex: 1, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MEDAL</Text>
-                </View>
-                {vueltas.map(({ label, v }) => {
-                  const presionesInVuelta = label !== 'Total'
-                    ? (label === '1ª Vuelta' ? r.primera.presiones : r.segunda.presiones)
-                    : [];
-                  return (
-                    <View key={label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border + '88' }}>
-                      <Text style={{ flex: 1, fontSize: 13, color: Colors.textSecondary }}>{label}</Text>
-                      <Text style={{ width: 60, textAlign: 'center', fontSize: 15, fontWeight: '800', color: signColor(v.matchAccum), fontVariant: ['tabular-nums'] }}>
-                        {v.matchAccum === 0 ? 'AS' : signStr(v.matchAccum)}
-                      </Text>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 12, color: Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
-                          {v.medalA || '—'} / {v.medalB || '—'}
-                        </Text>
-                        {presionesInVuelta.length > 0 && (
-                          <Text style={{ fontSize: 11, color: Colors.warning }}>
-                            {presionesInVuelta.map(p => `P(h${p.startHole})`).join(' ')}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
+                  </View>
+                ))}
               </View>
-            );
-          })}
+
+              {SECTIONS.map(section => (
+                <View key={section.key}>
+                  <View style={{ backgroundColor: Colors.greenDark + 'BB', paddingVertical: 4, paddingHorizontal: 10 }}>
+                    <Text style={{ color: Colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>{section.label}</Text>
+                  </View>
+                  {playerIds.map((rowId, ri) => (
+                    <View key={rowId} style={{ flexDirection: 'row', backgroundColor: ri % 2 === 0 ? section.bg : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '33' }}>
+                      <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }} numberOfLines={1}>
+                          {nameMap[rowId]?.split(' ')[0]}
+                        </Text>
+                      </View>
+                      {playerIds.map(colId => {
+                        if (rowId === colId) {
+                          return <View key={colId} style={{ width: COL_W, backgroundColor: DIAG_BG, ...CELL_BORDER }} />;
+                        }
+                        const cell = indCell(rowId, colId, section.key);
+                        return (
+                          <View key={colId} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, ...CELL_BORDER }}>
+                            {cell ? (
+                              <View style={{ alignItems: 'center', gap: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
+                                  {valStr(cell.match)}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
+                                  {valStr(cell.medal)}
+                                </Text>
+                                {cell.presiones > 0 && (
+                                  <Text style={{ fontSize: 9, color: Colors.warning, fontWeight: '800' }}>
+                                    {'P'.repeat(cell.presiones)}
+                                  </Text>
+                                )}
+                              </View>
+                            ) : (
+                              <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>—</Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         </View>
       )}
 
-      {/* Parejas */}
+      {/* Parejas — matriz M×M */}
       {parejasResults.length > 0 && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>👥 Parejas</Text>
-          {parejasResults.map(m => {
-            const vueltas = [
-              { label: '1ª Vuelta', v: m.primera },
-              { label: '2ª Vuelta', v: m.segunda },
-              { label: 'Total',     v: m.total   },
-            ] as const;
-            const pairings = round.round_pairings;
-            const pairName = (num: number) => {
-              const pair = pairings.find(p => p.pair_number === num);
-              if (!pair) return `Pareja ${num}`;
-              return `${nameMap[pair.player1_id]?.split(' ')[0]}/${nameMap[pair.player2_id]?.split(' ')[0]}`;
-            };
-            return (
-              <View key={`${m.pairA}-${m.pairB}`} style={{ backgroundColor: Colors.card, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
-                <View style={{ backgroundColor: Colors.greenDark + '22', padding: 10 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>
-                    {pairName(m.pairA)} vs {pairName(m.pairB)}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: 1, borderColor: Colors.border }}>
-                  <Text style={{ flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}> </Text>
-                  <Text style={{ width: 60, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MATCH</Text>
-                  <Text style={{ flex: 1, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MEDAL</Text>
-                </View>
-                {vueltas.map(({ label, v }) => (
-                  <View key={label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border + '88' }}>
-                    <Text style={{ flex: 1, fontSize: 13, color: Colors.textSecondary }}>{label}</Text>
-                    <Text style={{ width: 60, textAlign: 'center', fontSize: 15, fontWeight: '800', color: signColor(v.matchAccum), fontVariant: ['tabular-nums'] }}>
-                      {v.matchAccum === 0 ? 'AS' : signStr(v.matchAccum)}
-                    </Text>
-                    <Text style={{ flex: 1, textAlign: 'center', fontSize: 12, color: Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
-                      {v.medalA || '—'} / {v.medalB || '—'}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+              <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
+                <View style={{ width: ROW_H_W, padding: 8 }} />
+                {pairIds.map(pid => (
+                  <View key={pid} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                      {pairName(pid)}
                     </Text>
                   </View>
                 ))}
               </View>
-            );
-          })}
+
+              {SECTIONS.map(section => (
+                <View key={section.key}>
+                  <View style={{ backgroundColor: Colors.greenDark + 'BB', paddingVertical: 4, paddingHorizontal: 10 }}>
+                    <Text style={{ color: Colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>{section.label}</Text>
+                  </View>
+                  {pairIds.map((rowPair, ri) => (
+                    <View key={rowPair} style={{ flexDirection: 'row', backgroundColor: ri % 2 === 0 ? section.bg : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '33' }}>
+                      <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }} numberOfLines={1}>
+                          {pairName(rowPair)}
+                        </Text>
+                      </View>
+                      {pairIds.map(colPair => {
+                        if (rowPair === colPair) {
+                          return <View key={colPair} style={{ width: COL_W, backgroundColor: DIAG_BG, ...CELL_BORDER }} />;
+                        }
+                        const cell = parCell(rowPair, colPair, section.key);
+                        return (
+                          <View key={colPair} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, ...CELL_BORDER }}>
+                            {cell ? (
+                              <View style={{ alignItems: 'center', gap: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
+                                  {valStr(cell.match)}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
+                                  {valStr(cell.medal)}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>—</Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         </View>
       )}
 
-      {/* Pareja Base */}
+      {/* Pareja Base — fila única vs cada rival */}
       {parejaBaseResults.length > 0 && basePairData && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏆 Pareja Base</Text>
-          {parejaBaseResults.map((m, i) => {
-            const vueltas = [
-              { label: '1ª Vuelta', v: m.primera },
-              { label: '2ª Vuelta', v: m.segunda },
-              { label: 'Total',     v: m.total   },
-            ] as const;
-            return (
-              <View key={i} style={{ backgroundColor: Colors.card, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
-                <View style={{ backgroundColor: Colors.greenDark + '22', padding: 10 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>
-                    {nameMap[basePairData.player1_id]}/{nameMap[basePairData.player2_id]} vs Pareja {m.pairB}
-                  </Text>
-                </View>
-                {vueltas.map(({ label, v }) => (
-                  <View key={label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border + '88' }}>
-                    <Text style={{ flex: 1, fontSize: 13, color: Colors.textSecondary }}>{label}</Text>
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: signColor(v.matchAccum), fontVariant: ['tabular-nums'] }}>
-                      {v.matchAccum === 0 ? 'AS' : signStr(v.matchAccum)}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+              <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
+                <View style={{ width: ROW_H_W, padding: 8 }} />
+                {parejaBaseResults.map(m => (
+                  <View key={m.pairB} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                      {pairName(m.pairB)}
                     </Text>
                   </View>
                 ))}
               </View>
-            );
-          })}
+              {SECTIONS.map((section, si) => (
+                <View key={section.key} style={{ flexDirection: 'row', backgroundColor: si % 2 === 0 ? section.bg : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '33' }}>
+                  <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.text }}>{section.label}</Text>
+                  </View>
+                  {parejaBaseResults.map(m => {
+                    const v = m[section.key];
+                    const match = v.matchAccum;
+                    const medal = v.medalB - v.medalA;
+                    return (
+                      <View key={m.pairB} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, ...CELL_BORDER }}>
+                        <View style={{ alignItems: 'center', gap: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: valColor(match), fontVariant: ['tabular-nums'] }}>
+                            {valStr(match)}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: valColor(medal), fontVariant: ['tabular-nums'] }}>
+                            {valStr(medal)}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </ScrollView>
         </View>
       )}
 
@@ -669,8 +766,17 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   function fmt(n: number) { return (n >= 0 ? '+' : '') + `$${Math.abs(n).toLocaleString('es-MX')}`; }
   function color(n: number) { return n > 0 ? Colors.success : n < 0 ? Colors.error : Colors.textSecondary; }
 
-  const activeGames = ['marcas_esp', 'marcas', 'individuales', 'individuales_medal', 'parejas', 'parejas_medal', 'parejas_base', 'presiones'].filter(g => gameConfigs[g]?.active);
-  const gameLabels: Record<string, string> = { marcas: 'Plumas', marcas_esp: 'Marcas', individuales: 'I.Match', individuales_medal: 'I.Medal', parejas: 'P.Match', parejas_medal: 'P.Medal', parejas_base: 'P.Base', presiones: 'Presiones' };
+  // Columnas consolidadas: agrupa juegos relacionados
+  const colGroups = [
+    { key: 'marcas_col',  label: 'Marcas',    fields: ['marcas_esp', 'marcas'] },
+    { key: 'ind_col',     label: 'Individual', fields: ['individuales', 'individuales_medal', 'presiones'] },
+    { key: 'parejas_col', label: 'Parejas',   fields: ['parejas', 'parejas_medal'] },
+    { key: 'base_col',    label: 'P.Base',    fields: ['parejas_base'] },
+  ].filter(g => g.fields.some(f => gameConfigs[f]?.active));
+
+  function groupVal(row: typeof dineros[0], fields: string[]) {
+    return fields.reduce((s, f) => s + ((row as any)[f] ?? 0), 0);
+  }
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
@@ -678,8 +784,8 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
         {/* Header */}
         <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, padding: 10 }}>
           <Text style={{ flex: 1, color: Colors.white, fontWeight: '700', fontSize: 13 }}>Jugador</Text>
-          {activeGames.map(g => (
-            <Text key={g} style={{ width: 64, textAlign: 'center', color: Colors.greenLight, fontSize: 11, fontWeight: '700' }}>{gameLabels[g]}</Text>
+          {colGroups.map(g => (
+            <Text key={g.key} style={{ width: 72, textAlign: 'center', color: Colors.greenLight, fontSize: 11, fontWeight: '700' }}>{g.label}</Text>
           ))}
           <Text style={{ width: 70, textAlign: 'right', color: Colors.gold, fontWeight: '800', fontSize: 13 }}>Total</Text>
         </View>
@@ -690,10 +796,10 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
             <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.text }} numberOfLines={1}>
               {nameMap[row.player_id]?.split(' ')[0]}
             </Text>
-            {activeGames.map(g => {
-              const val = row[g as keyof typeof row] as number;
+            {colGroups.map(g => {
+              const val = groupVal(row, g.fields);
               return (
-                <Text key={g} style={{ width: 64, textAlign: 'center', fontSize: 12, fontWeight: '700', color: color(val), fontVariant: ['tabular-nums'] }}>
+                <Text key={g.key} style={{ width: 72, textAlign: 'center', fontSize: 12, fontWeight: '700', color: color(val), fontVariant: ['tabular-nums'] }}>
                   {val !== 0 ? fmt(val) : '—'}
                 </Text>
               );

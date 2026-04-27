@@ -438,12 +438,14 @@ export function calcDineros(
     });
   }
 
-  // Pareja Base — match 3 vueltas
+  // Pareja Base — match + medal, 3 vueltas
   if (gameConfigs.parejas_base?.active && basePair) {
     const bet = gameConfigs.parejas_base.bet_amount;
     parejaBaseResults.forEach(m => {
       for (const v of [m.primera, m.segunda, m.total]) {
-        const earned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
+        const matchEarned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
+        const medalEarned = v.medalA < v.medalB ? bet : v.medalA > v.medalB ? -bet : 0;
+        const earned = matchEarned + medalEarned;
         [m.playerA1, m.playerA2].forEach(id => { if (rows[id]) rows[id].parejas_base += earned; });
         [m.playerB1, m.playerB2].forEach(id => { if (rows[id]) rows[id].parejas_base -= earned; });
       }
