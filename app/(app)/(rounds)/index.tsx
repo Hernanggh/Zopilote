@@ -7,6 +7,7 @@ import { Colors } from '@/constants/colors';
 type Round = {
   id: string;
   date: string;
+  created_at: string;
   status: 'active' | 'setup' | 'finished';
   start_hole: number;
   courses: { name: string };
@@ -23,12 +24,26 @@ export default function RoundsHome() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rounds')
-        .select('id, date, status, start_hole, courses(name)')
+        .select('id, date, created_at, status, start_hole, courses(name)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []).map(r => ({ ...r, courses: Array.isArray(r.courses) ? r.courses[0] : r.courses })) as Round[];
     },
   });
+
+  // Build per-date index for "#2" suffix (oldest of same day = no suffix, next = #2, etc.)
+  const dateGroups: Record<string, string[]> = {};
+  [...rounds].reverse().forEach(r => {
+    if (!dateGroups[r.date]) dateGroups[r.date] = [];
+    dateGroups[r.date].push(r.id);
+  });
+  function roundName(item: Round): string {
+    const dateStr = new Date(item.date + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    const group = dateGroups[item.date] ?? [];
+    if (group.length <= 1) return dateStr;
+    const idx = group.indexOf(item.id) + 1;
+    return idx <= 1 ? dateStr : `${dateStr} #${idx}`;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -73,7 +88,9 @@ export default function RoundsHome() {
             <Link href={`/${item.id}` as any} asChild>
               <Pressable style={{ backgroundColor: Colors.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 6 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.text }}>{item.courses?.name ?? 'Campo'}</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                    {roundName(item)}
+                  </Text>
                   <View style={{ backgroundColor: STATUS_COLOR[item.status] + '22', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: STATUS_COLOR[item.status] }}>
                       {STATUS_LABEL[item.status]}
@@ -81,8 +98,7 @@ export default function RoundsHome() {
                   </View>
                 </View>
                 <Text style={{ fontSize: 13, color: Colors.textSecondary }}>
-                  {new Date(item.date).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  {' · '}Hoyo {item.start_hole}
+                  {item.courses?.name ?? 'Campo'}{' · '}Hoyo {item.start_hole}
                 </Text>
               </Pressable>
             </Link>

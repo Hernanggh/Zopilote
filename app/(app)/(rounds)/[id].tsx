@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
-import { Stack, useLocalSearchParams, Redirect } from 'expo-router';
+import { Stack, useLocalSearchParams, Redirect, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
@@ -148,12 +148,13 @@ function useSpecialMarcas(roundId: string) {
 
 // ─── Scorecard Tab ────────────────────────────────────────────────────────────
 
-function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
+function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonly }: {
   round: RoundData;
   holes: HoleInfo[];
   grossMap: ScoreMap;
   marcasEspMap: MarcasEspMap;
   holeOrder: number[];
+  readonly: boolean;
 }) {
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const [localScores, setLocalScores] = useState<ScoreMap>({});
@@ -227,6 +228,13 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
+      {readonly && (
+        <View style={{ backgroundColor: Colors.warning + '22', padding: 12, borderBottomWidth: 1, borderColor: Colors.warning + '44' }}>
+          <Text style={{ color: Colors.warning, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>
+            Partida terminada · toca Editar para modificar scores
+          </Text>
+        </View>
+      )}
       {!!saveErr && (
         <View style={{ backgroundColor: '#FFEBEE', margin: 12, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
           <Text style={{ color: Colors.error, fontWeight: '600' }}>⚠️ Error guardando: {saveErr}</Text>
@@ -294,22 +302,23 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                         <TextInput
                           ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
                           value={getValue(p.player_id, holeNum)}
-                          onChangeText={v => handleChange(p.player_id, holeNum, v)}
-                          onBlur={() => handleBlur(p.player_id, holeNum)}
+                          onChangeText={v => !readonly && handleChange(p.player_id, holeNum, v)}
+                          onBlur={() => !readonly && handleBlur(p.player_id, holeNum)}
+                          editable={!readonly}
                           keyboardType="number-pad"
                           inputMode="numeric"
                           maxLength={2}
                           style={{
                             width: 42,
                             height: 38,
-                            backgroundColor: ventaja ? '#FFFF0066' : grossMap[p.player_id]?.[holeNum] ? Colors.greenLight + '33' : Colors.background,
+                            backgroundColor: readonly ? Colors.background : ventaja ? '#FFFF0066' : grossMap[p.player_id]?.[holeNum] ? Colors.greenLight + '33' : Colors.background,
                             borderRadius: 8,
                             textAlign: 'center',
                             fontSize: 16,
                             fontWeight: '700',
-                            color: Colors.text,
+                            color: readonly ? Colors.textSecondary : Colors.text,
                             borderWidth: 1,
-                            borderColor: localScores[p.player_id]?.[holeNum] ? Colors.gold : ventaja ? '#CCCC00' : Colors.border,
+                            borderColor: readonly ? Colors.border : localScores[p.player_id]?.[holeNum] ? Colors.gold : ventaja ? '#CCCC00' : Colors.border,
                           }}
                         />
                       </View>
@@ -322,7 +331,8 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                     <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
                       <TextInput
                         value={getMarcaValue(p.player_id, holeNum)}
-                        onChangeText={v => handleMarcaChange(p.player_id, holeNum, v)}
+                        onChangeText={v => !readonly && handleMarcaChange(p.player_id, holeNum, v)}
+                        editable={!readonly}
                         keyboardType="number-pad"
                         inputMode="numeric"
                         maxLength={2}
@@ -827,7 +837,11 @@ const TABS = ['Scorecard', 'Resultados', 'Dineros'] as const;
 
 export default function RoundScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>('Scorecard');
+  const [confirmModal, setConfirmModal] = useState<'finish' | 'pause' | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const { data: round, isLoading: loadingRound } = useRoundData(id);
   const { data: holes = [], isLoading: loadingHoles } = useCourseHoles(round?.course_id ?? '');
@@ -854,13 +868,66 @@ export default function RoundScreen() {
   }
 
   const holeOrder = getHoleOrder(round.start_hole as 1 | 10);
+  const isActive = round.status === 'active' || round.status === 'setup';
+
+  async function doFinish() {
+    setSaving(true);
+    await supabase.from('rounds').update({ status: 'finished' }).eq('id', id);
+    setSaving(false);
+    setConfirmModal(null);
+    router.replace('/');
+  }
+
+  function doPause() {
+    setConfirmModal(null);
+    router.replace('/');
+  }
+
+  async function doEdit() {
+    await supabase.from('rounds').update({ status: 'active' }).eq('id', id);
+    qc.invalidateQueries({ queryKey: ['round', id] });
+  }
+
+  const MODAL_CONFIG = {
+    finish: {
+      title: '¿Terminar partida?',
+      body: '¿Confirmas que quieres terminar la partida?',
+      confirmLabel: 'Terminar',
+      confirmColor: Colors.error,
+    },
+    pause: {
+      title: '¿Pausar partida?',
+      body: 'La partida quedará activa. Puedes retomar desde la lista de partidas.',
+      confirmLabel: 'Pausar',
+      confirmColor: Colors.green,
+    },
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <Stack.Screen options={{ title: round.courses?.name ?? 'Partida', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen options={{
+        title: round.courses?.name ?? 'Partida',
+        headerBackTitle: 'Atrás',
+        headerRight: isActive ? () => (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() => setConfirmModal('pause')}
+              style={{ backgroundColor: Colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '600', color: Colors.text }}>Pausar</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setConfirmModal('finish')}
+              style={{ backgroundColor: Colors.error + '22', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.error }}>Terminar</Text>
+            </Pressable>
+          </View>
+        ) : undefined,
+      }} />
 
       {/* Tab bar */}
-      <View style={{ flexDirection: 'row', backgroundColor: Colors.card, borderBottomWidth: 1, borderColor: Colors.border }}>
+      <View style={{ flexDirection: 'row', backgroundColor: Colors.card, borderBottomWidth: 1, borderColor: Colors.border, alignItems: 'center' }}>
         {TABS.map(tab => (
           <Pressable
             key={tab}
@@ -872,12 +939,72 @@ export default function RoundScreen() {
             </Text>
           </Pressable>
         ))}
+        {isActive ? (
+          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10 }}>
+            <Pressable
+              onPress={() => setConfirmModal('pause')}
+              style={{ backgroundColor: Colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }}>Pausar</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setConfirmModal('finish')}
+              style={{ backgroundColor: Colors.error + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.error }}>Terminar</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10 }}>
+            <Pressable
+              onPress={() => router.replace('/')}
+              style={{ backgroundColor: Colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }}>Regresar</Text>
+            </Pressable>
+            <Pressable
+              onPress={doEdit}
+              style={{ backgroundColor: Colors.green + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.green }}>Editar</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* Content */}
-      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
+      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} readonly={!isActive} />}
       {activeTab === 'Resultados' && <ResultadosTab round={round} holes={holes} grossMap={grossMap} holeOrder={holeOrder} />}
       {activeTab === 'Dineros' && <DinerosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
+
+      {/* Confirmation modal */}
+      {confirmModal && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+          <View style={{ backgroundColor: Colors.card, borderRadius: 20, padding: 24, marginHorizontal: 32, gap: 12, borderWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.text }}>{MODAL_CONFIG[confirmModal].title}</Text>
+            <Text style={{ fontSize: 14, color: Colors.textSecondary, lineHeight: 20 }}>{MODAL_CONFIG[confirmModal].body}</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <Pressable
+                onPress={() => setConfirmModal(null)}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.background, alignItems: 'center', borderWidth: 1, borderColor: Colors.border }}
+              >
+                <Text style={{ fontWeight: '600', color: Colors.text }}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmModal === 'finish' ? doFinish : doPause}
+                disabled={saving}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: MODAL_CONFIG[confirmModal].confirmColor, alignItems: 'center' }}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={{ fontWeight: '700', color: Colors.white }}>{MODAL_CONFIG[confirmModal].confirmLabel}</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
