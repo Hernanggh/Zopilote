@@ -9,14 +9,23 @@ type Course = { id: string; name: string };
 type Player = { id: string; name: string; default_handicap: number };
 type RoundPlayer = { player_id: string; name: string; handicap: number };
 type GameConfig = { active: boolean; bet_amount: number };
-type GameKey = 'marcas' | 'individuales' | 'parejas' | 'parejas_base' | 'presiones';
+type GameKey = 'marcas' | 'marcas_esp' | 'individuales' | 'individuales_medal' | 'parejas' | 'parejas_medal' | 'parejas_base' | 'presiones';
 
 const GAME_LABELS: Record<GameKey, string> = {
-  marcas: 'Marcas (Plumas)',
-  individuales: 'Individuales',
-  parejas: 'Parejas',
+  marcas: 'Plumas (hoyo neto)',
+  marcas_esp: 'Marcas Especiales',
+  individuales: 'Individuales Match',
+  individuales_medal: 'Individuales Medal',
+  parejas: 'Parejas Match',
+  parejas_medal: 'Parejas Medal',
   parejas_base: 'Pareja Base',
   presiones: 'Presiones',
+};
+
+// Game types that are sub-options visually grouped under another game
+const GAME_INDENT: Partial<Record<GameKey, true>> = {
+  individuales_medal: true,
+  parejas_medal: true,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -56,11 +65,14 @@ export default function NewRound() {
   const [startHole, setStartHole] = useState<1 | 10>(1);
   const [players, setPlayers] = useState<RoundPlayer[]>([]);
   const [games, setGames] = useState<Record<GameKey, GameConfig>>({
-    marcas:       { active: true,  bet_amount: 10 },
-    individuales: { active: true,  bet_amount: 25 },
-    parejas:      { active: false, bet_amount: 50 },
-    parejas_base: { active: false, bet_amount: 50 },
-    presiones:    { active: false, bet_amount: 0  },
+    marcas:             { active: true,  bet_amount: 10  },
+    marcas_esp:         { active: true,  bet_amount: 50  },
+    individuales:       { active: true,  bet_amount: 25  },
+    individuales_medal: { active: true,  bet_amount: 25  },
+    parejas:            { active: false, bet_amount: 50  },
+    parejas_medal:      { active: false, bet_amount: 50  },
+    parejas_base:       { active: false, bet_amount: 50  },
+    presiones:          { active: false, bet_amount: 0   },
   });
   const [pairings, setPairings] = useState<{ pair_number: number; p1: string; p2: string }[]>([]);
   const [basePair, setBasePair] = useState<{ p1: string; p2: string } | null>(null);
@@ -245,26 +257,29 @@ export default function NewRound() {
 
         {/* Juegos */}
         <Section title="Juegos y Apuestas">
-          {(Object.keys(games) as GameKey[]).map(key => (
-            <Card key={key} style={{ gap: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: Colors.text }}>{GAME_LABELS[key]}</Text>
-                <Switch value={games[key].active} onValueChange={() => toggleGame(key)} trackColor={{ true: Colors.green }} />
-              </View>
-              {games[key].active && key !== 'presiones' && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 13, color: Colors.textSecondary }}>Apuesta $</Text>
-                  <TextInput
-                    value={String(games[key].bet_amount)}
-                    onChangeText={v => updateBet(key, v)}
-                    keyboardType="number-pad"
-                    inputMode="numeric"
-                    style={{ backgroundColor: Colors.background, borderRadius: 8, padding: 8, width: 80, fontSize: 15, fontWeight: '700', color: Colors.text, borderWidth: 1, borderColor: Colors.border, textAlign: 'center' }}
-                  />
+          {(Object.keys(games) as GameKey[]).map(key => {
+            const indented = !!GAME_INDENT[key];
+            return (
+              <Card key={key} style={{ gap: 10, marginLeft: indented ? 16 : 0, borderLeftWidth: indented ? 3 : 1, borderLeftColor: indented ? Colors.green + '66' : Colors.border }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: indented ? 14 : 15, fontWeight: '600', color: indented ? Colors.textSecondary : Colors.text }}>{GAME_LABELS[key]}</Text>
+                  <Switch value={games[key].active} onValueChange={() => toggleGame(key)} trackColor={{ true: Colors.green }} />
                 </View>
-              )}
-            </Card>
-          ))}
+                {games[key].active && key !== 'presiones' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 13, color: Colors.textSecondary }}>Apuesta $</Text>
+                    <TextInput
+                      value={String(games[key].bet_amount)}
+                      onChangeText={v => updateBet(key, v)}
+                      keyboardType="number-pad"
+                      inputMode="numeric"
+                      style={{ backgroundColor: Colors.background, borderRadius: 8, padding: 8, width: 80, fontSize: 15, fontWeight: '700', color: Colors.text, borderWidth: 1, borderColor: Colors.border, textAlign: 'center' }}
+                    />
+                  </View>
+                )}
+              </Card>
+            );
+          })}
         </Section>
 
         {/* Parejas */}

@@ -4,57 +4,59 @@ export type ScoreEntry = { player_id: string; hole_number: number; gross_score: 
 export type Pairing = { pair_number: number; player1_id: string; player2_id: string };
 
 export type RelativeHandicap = { id: string; relative: number };
-export type NetScore = { player_id: string; hole_number: number; net: number; par: number };
 
 export type MarcasResult = {
   byHole: Record<number, { winner_ids: string[]; plumas: number; carryover: number }>;
   totals: Record<string, number>;
 };
 
-export type MatchEntry = { hole_number: number; player_a: string; player_b: string; result: number };
-export type MatchState = { accumulated: number; presion1Active: boolean; presion1Start: number; presion2Active: boolean; presion2Start: number };
+export type PresionesResult = {
+  startHole: number;
+  byHole: Record<number, { result: number; accum: number }>;
+  total: number; // +1 = playerA won presion, -1 = playerB won, 0 = tie
+  winnerId: string | null;
+  loserId: string | null;
+};
+
+export type VueltaMatchResult = {
+  matchAccum: number;  // + = playerA ganando
+  medalA: number;      // suma netos playerA en esta vuelta
+  medalB: number;
+  presiones: PresionesResult[];
+};
 
 export type IndividualResult = {
   matchup: string;
   playerA: string;
   playerB: string;
-  byHole: Record<number, { netA: number; netB: number; matchResult: number; matchAccum: number }>;
-  matchTotal: number;
-  medalTotalA: number;
-  medalTotalB: number;
-  presiones: PresionesResult[];
+  primera: VueltaMatchResult;
+  segunda: VueltaMatchResult;
+  total: { matchAccum: number; medalA: number; medalB: number };
 };
 
-export type PresionesResult = {
-  startHole: number;
-  byHole: Record<number, { result: number; accum: number }>;
-  total: number;
-  winnerId: string | null;
-  loserId: string | null;
-};
-
-export type ParejasHoleResult = {
-  bestA: number; worstA: number;
-  bestB: number; worstB: number;
-  bestResult: number; worstResult: number;
-  bestAccum: number; worstAccum: number;
-  medalA: number; medalB: number; medalAccum: number;
+export type VueltaParejasResult = {
+  matchAccum: number;  // acumulado de (bestResult + worstResult) por hoyo
+  medalA: number;      // suma netos pareja A (ambos jugadores)
+  medalB: number;
 };
 
 export type ParejasMatchup = {
   pairA: number; pairB: number;
   playerA1: string; playerA2: string;
   playerB1: string; playerB2: string;
-  byHole: Record<number, ParejasHoleResult>;
-  bestTotal: number; worstTotal: number; medalTotal: number;
-  totalResult: number;
+  primera: VueltaParejasResult;
+  segunda: VueltaParejasResult;
+  total: VueltaParejasResult;
 };
 
 export type DinerosRow = {
   player_id: string;
   marcas: number;
+  marcas_esp: number;
   individuales: number;
+  individuales_medal: number;
   parejas: number;
+  parejas_medal: number;
   parejas_base: number;
   presiones: number;
   total: number;
@@ -80,7 +82,6 @@ export function calcNetScore(gross: number, relativeHandicap: number, holeHandic
   return gross - calcHandicapStrokes(relativeHandicap, holeHandicapRank);
 }
 
-// Build a map: player_id → net score per hole
 export function buildNetScoreMap(
   scores: ScoreEntry[],
   relativeHandicaps: RelativeHandicap[],
@@ -117,7 +118,7 @@ export function calcMarcas(
   let carryover = 0;
 
   for (const hole of holeNumbers) {
-    const nets: { id: string; net: number }[] = playerIds
+    const nets = playerIds
       .filter(id => netMap[id]?.[hole] !== undefined)
       .map(id => ({ id, net: netMap[id][hole] }));
 
@@ -135,7 +136,6 @@ export function calcMarcas(
       totals[winners[0]] += plumas;
       carryover = 0;
     } else {
-      // Tie → accumulate
       byHole[hole] = { winner_ids: [], plumas: 0, carryover };
       carryover++;
     }
@@ -146,58 +146,68 @@ export function calcMarcas(
 
 // ─── Individual ──────────────────────────────────────────────────────────────
 
-function calcOneVsOne(
+function calcVuelta(
   playerA: string,
   playerB: string,
   netMap: Record<string, Record<number, number>>,
-  holeNumbers: number[],
-  betAmount: number
-): IndividualResult {
-  const byHole: IndividualResult['byHole'] = {};
+  vueltaHoles: number[],
+  withPresiones: boolean
+): VueltaMatchResult {
   let matchAccum = 0;
   let medalA = 0;
   let medalB = 0;
-  const presiones: PresionesResult[] = [];
-  type PresionState = { startHole: number; byHole: Record<number, { result: number; accum: number }>; accum: number };
+
+  type PresionState = {
+    startHole: number;
+    byHole: Record<number, { result: number; accum: number }>;
+    accum: number;
+  };
   let presion1: PresionState | null = null;
   let presion2: PresionState | null = null;
 
-  for (const hole of holeNumbers) {
+  for (let i = 0; i < vueltaHoles.length; i++) {
+    const hole = vueltaHoles[i];
     const netA = netMap[playerA]?.[hole];
     const netB = netMap[playerB]?.[hole];
     if (netA === undefined || netB === undefined) continue;
 
-    const holeResult = netA < netB ? 1 : netA > netB ? -1 : 0; // +1 = A wins
+    const holeResult = netA < netB ? 1 : netA > netB ? -1 : 0;
     matchAccum += holeResult;
     medalA += netA;
     medalB += netB;
 
-    byHole[hole] = { netA, netB, matchResult: holeResult, matchAccum };
+    if (!withPresiones) continue;
 
-    // Presion 1: activates when A is down 2 in match (matchAccum <= -2) and not active yet
-    if (!presion1 && matchAccum <= -2) {
+    // remainingAfter = hoyos que quedan después del hoyo actual en esta vuelta
+    const remainingAfter = vueltaHoles.length - 1 - i;
+
+    // P1: activa cuando el líder tiene ventaja mayor que hoyos restantes (inalcanzable)
+    if (!presion1 && remainingAfter > 0 && Math.abs(matchAccum) > remainingAfter) {
       presion1 = { startHole: hole, byHole: {}, accum: 0 };
     }
-    if (presion1 && hole >= presion1.startHole) {
+
+    if (presion1) {
       presion1.accum += holeResult;
       presion1.byHole[hole] = { result: holeResult, accum: presion1.accum };
-    }
 
-    // Presion 2: activates when A is down 2 in presion1 match
-    if (presion1 && !presion2 && presion1.accum <= -2) {
-      presion2 = { startHole: hole, byHole: {}, accum: 0 };
-    }
-    if (presion2 && hole >= presion2.startHole) {
-      presion2.accum += holeResult;
-      presion2.byHole[hole] = { result: holeResult, accum: presion2.accum };
+      // P2: activa cuando dentro de P1 el líder también tiene ventaja inalcanzable
+      if (!presion2 && remainingAfter > 0 && Math.abs(presion1.accum) > remainingAfter) {
+        presion2 = { startHole: hole, byHole: {}, accum: 0 };
+        presion2.accum += holeResult;
+        presion2.byHole[hole] = { result: holeResult, accum: presion2.accum };
+      } else if (presion2) {
+        presion2.accum += holeResult;
+        presion2.byHole[hole] = { result: holeResult, accum: presion2.accum };
+      }
     }
   }
 
+  const presiones: PresionesResult[] = [];
   if (presion1) {
     presiones.push({
       startHole: presion1.startHole,
       byHole: presion1.byHole,
-      total: presion1.accum > 0 ? betAmount : presion1.accum < 0 ? -betAmount : 0,
+      total: presion1.accum > 0 ? 1 : presion1.accum < 0 ? -1 : 0,
       winnerId: presion1.accum > 0 ? playerA : presion1.accum < 0 ? playerB : null,
       loserId: presion1.accum > 0 ? playerB : presion1.accum < 0 ? playerA : null,
     });
@@ -206,53 +216,95 @@ function calcOneVsOne(
     presiones.push({
       startHole: presion2.startHole,
       byHole: presion2.byHole,
-      total: presion2.accum > 0 ? betAmount : presion2.accum < 0 ? -betAmount : 0,
+      total: presion2.accum > 0 ? 1 : presion2.accum < 0 ? -1 : 0,
       winnerId: presion2.accum > 0 ? playerA : presion2.accum < 0 ? playerB : null,
       loserId: presion2.accum > 0 ? playerB : presion2.accum < 0 ? playerA : null,
     });
   }
 
-  return {
-    matchup: `${playerA}_${playerB}`,
-    playerA,
-    playerB,
-    byHole,
-    matchTotal: matchAccum,
-    medalTotalA: medalA,
-    medalTotalB: medalB,
-    presiones,
-  };
+  return { matchAccum, medalA, medalB, presiones };
 }
 
 export function calcIndividualAll(
   playerIds: string[],
   netMap: Record<string, Record<number, number>>,
   holeNumbers: number[],
-  betAmount: number,
   presionesActive: boolean
 ): IndividualResult[] {
+  const primera9 = holeNumbers.slice(0, 9);
+  const segunda9 = holeNumbers.slice(9);
   const results: IndividualResult[] = [];
+
   for (let i = 0; i < playerIds.length; i++) {
     for (let j = i + 1; j < playerIds.length; j++) {
-      const r = calcOneVsOne(playerIds[i], playerIds[j], netMap, holeNumbers, betAmount);
-      if (!presionesActive) r.presiones = [];
-      results.push(r);
+      const pA = playerIds[i];
+      const pB = playerIds[j];
+
+      const primera = calcVuelta(pA, pB, netMap, primera9, presionesActive);
+      const segunda = calcVuelta(pA, pB, netMap, segunda9, presionesActive);
+
+      // Total: sin presiones, calculado sobre los 18 hoyos
+      let totalMatchAccum = 0, totalMedalA = 0, totalMedalB = 0;
+      for (const hole of holeNumbers) {
+        const netA = netMap[pA]?.[hole];
+        const netB = netMap[pB]?.[hole];
+        if (netA === undefined || netB === undefined) continue;
+        totalMatchAccum += netA < netB ? 1 : netA > netB ? -1 : 0;
+        totalMedalA += netA;
+        totalMedalB += netB;
+      }
+
+      results.push({
+        matchup: `${pA}_${pB}`,
+        playerA: pA,
+        playerB: pB,
+        primera,
+        segunda,
+        total: { matchAccum: totalMatchAccum, medalA: totalMedalA, medalB: totalMedalB },
+      });
     }
   }
+
   return results;
 }
 
 // ─── Parejas ─────────────────────────────────────────────────────────────────
 
-function pairNet(p1: string, p2: string, netMap: Record<string, Record<number, number>>, hole: number): { best: number; worst: number; medal: number } | null {
+function pairNetForHole(
+  p1: string, p2: string,
+  netMap: Record<string, Record<number, number>>,
+  hole: number
+): { best: number; worst: number; medal: number } | null {
   const n1 = netMap[p1]?.[hole];
   const n2 = netMap[p2]?.[hole];
   if (n1 === undefined || n2 === undefined) return null;
-  return {
-    best: Math.min(n1, n2),
-    worst: Math.max(n1, n2),
-    medal: n1 + n2,
-  };
+  return { best: Math.min(n1, n2), worst: Math.max(n1, n2), medal: n1 + n2 };
+}
+
+function calcVueltaParejas(
+  pA: Pairing,
+  pB: Pairing,
+  netMap: Record<string, Record<number, number>>,
+  vueltaHoles: number[]
+): VueltaParejasResult {
+  let matchAccum = 0;
+  let medalA = 0;
+  let medalB = 0;
+
+  for (const hole of vueltaHoles) {
+    const a = pairNetForHole(pA.player1_id, pA.player2_id, netMap, hole);
+    const b = pairNetForHole(pB.player1_id, pB.player2_id, netMap, hole);
+    if (!a || !b) continue;
+
+    // Best ball + worst ball acumulados juntos (2 puntos posibles por hoyo)
+    const bestResult = a.best < b.best ? 1 : a.best > b.best ? -1 : 0;
+    const worstResult = a.worst < b.worst ? 1 : a.worst > b.worst ? -1 : 0;
+    matchAccum += bestResult + worstResult;
+    medalA += a.medal;
+    medalB += b.medal;
+  }
+
+  return { matchAccum, medalA, medalB };
 }
 
 export function calcParejas(
@@ -260,40 +312,14 @@ export function calcParejas(
   netMap: Record<string, Record<number, number>>,
   holeNumbers: number[]
 ): ParejasMatchup[] {
+  const primera9 = holeNumbers.slice(0, 9);
+  const segunda9 = holeNumbers.slice(9);
   const results: ParejasMatchup[] = [];
+
   for (let i = 0; i < pairings.length; i++) {
     for (let j = i + 1; j < pairings.length; j++) {
       const pA = pairings[i];
       const pB = pairings[j];
-      const byHole: ParejasMatchup['byHole'] = {};
-      let bestAccum = 0, worstAccum = 0, medalAccum = 0;
-      let bestTotal = 0, worstTotal = 0, medalTotal = 0;
-
-      for (const hole of holeNumbers) {
-        const a = pairNet(pA.player1_id, pA.player2_id, netMap, hole);
-        const b = pairNet(pB.player1_id, pB.player2_id, netMap, hole);
-        if (!a || !b) continue;
-
-        const bestResult = a.best < b.best ? 1 : a.best > b.best ? -1 : 0;
-        const worstResult = a.worst < b.worst ? 1 : a.worst > b.worst ? -1 : 0;
-        const medalResult = a.medal < b.medal ? 1 : a.medal > b.medal ? -1 : 0;
-
-        bestAccum += bestResult;
-        worstAccum += worstResult;
-        medalAccum += medalResult;
-
-        byHole[hole] = {
-          bestA: a.best, worstA: a.worst,
-          bestB: b.best, worstB: b.worst,
-          bestResult, worstResult,
-          bestAccum, worstAccum,
-          medalA: a.medal, medalB: b.medal, medalAccum,
-        };
-      }
-
-      bestTotal = bestAccum;
-      worstTotal = worstAccum;
-      medalTotal = medalAccum;
 
       results.push({
         pairA: pA.pair_number,
@@ -302,14 +328,13 @@ export function calcParejas(
         playerA2: pA.player2_id,
         playerB1: pB.player1_id,
         playerB2: pB.player2_id,
-        byHole,
-        bestTotal,
-        worstTotal,
-        medalTotal,
-        totalResult: bestTotal + worstTotal,
+        primera: calcVueltaParejas(pA, pB, netMap, primera9),
+        segunda: calcVueltaParejas(pA, pB, netMap, segunda9),
+        total: calcVueltaParejas(pA, pB, netMap, holeNumbers),
       });
     }
   }
+
   return results;
 }
 
@@ -320,10 +345,7 @@ export function calcParejaBase(
   holeNumbers: number[]
 ): ParejasMatchup[] {
   const basePairing: Pairing = { pair_number: 0, player1_id: basePair.player1_id, player2_id: basePair.player2_id };
-  return otherPairings.map(opp => {
-    const results = calcParejas([basePairing, opp], netMap, holeNumbers);
-    return results[0];
-  });
+  return otherPairings.map(opp => calcParejas([basePairing, opp], netMap, holeNumbers)[0]);
 }
 
 // ─── Dineros ─────────────────────────────────────────────────────────────────
@@ -340,20 +362,12 @@ export function calcDineros(
 ): DinerosRow[] {
   const rows: Record<string, DinerosRow> = {};
   playerIds.forEach(id => {
-    rows[id] = { player_id: id, marcas: 0, individuales: 0, parejas: 0, parejas_base: 0, presiones: 0, total: 0 };
+    rows[id] = { player_id: id, marcas: 0, marcas_esp: 0, individuales: 0, individuales_medal: 0, parejas: 0, parejas_medal: 0, parejas_base: 0, presiones: 0, total: 0 };
   });
 
-  // Marcas
+  // Marcas (plumas por hoyo neto)
   if (gameConfigs.marcas?.active) {
     const bet = gameConfigs.marcas.bet_amount;
-    Object.entries(marcas.totals).forEach(([id, plumas]) => {
-      if (rows[id]) rows[id].marcas += plumas * bet;
-    });
-    // Subtract: each pluma costs bet to everyone who didn't win it
-    // Actually marcas is zero-sum: winner gets bet * plumas from each loser...
-    // Re-interpreting: each pluma worth bet, loser pays total plumas won by others
-    // Simplest: net = (my plumas - avg plumas) * bet — but correct is:
-    // Each hoyo: winner gets bet from each of the other N-1 players
     const totalPlayers = playerIds.length;
     Object.entries(marcas.totals).forEach(([id, plumas]) => {
       if (!rows[id]) return;
@@ -362,77 +376,82 @@ export function calcDineros(
     });
   }
 
-  // Individuales (match result: winner gets bet, loser pays bet)
+  // Individuales match — 3 vueltas (primera, segunda, total)
   if (gameConfigs.individuales?.active) {
     const bet = gameConfigs.individuales.bet_amount;
     individualResults.forEach(r => {
       if (!rows[r.playerA] || !rows[r.playerB]) return;
-      const earned = r.matchTotal > 0 ? bet : r.matchTotal < 0 ? -bet : 0;
-      rows[r.playerA].individuales += earned;
-      rows[r.playerB].individuales -= earned;
+      for (const v of [r.primera, r.segunda, r.total]) {
+        const earned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
+        rows[r.playerA].individuales += earned;
+        rows[r.playerB].individuales -= earned;
+      }
     });
   }
 
-  // Presiones
+  // Individuales medal — 3 vueltas
+  if (gameConfigs.individuales_medal?.active) {
+    const bet = gameConfigs.individuales_medal.bet_amount;
+    individualResults.forEach(r => {
+      if (!rows[r.playerA] || !rows[r.playerB]) return;
+      for (const v of [r.primera, r.segunda, r.total]) {
+        const earned = v.medalA < v.medalB ? bet : v.medalA > v.medalB ? -bet : 0;
+        rows[r.playerA].individuales_medal += earned;
+        rows[r.playerB].individuales_medal -= earned;
+      }
+    });
+  }
+
+  // Presiones — solo de primera y segunda vuelta de individuales
   if (gameConfigs.presiones?.active) {
     const bet = gameConfigs.individuales?.bet_amount ?? 0;
     individualResults.forEach(r => {
-      r.presiones.forEach(p => {
+      [...r.primera.presiones, ...r.segunda.presiones].forEach(p => {
         if (!p.winnerId || !p.loserId) return;
-        if (rows[p.winnerId]) rows[p.winnerId].presiones += Math.abs(p.total);
-        if (rows[p.loserId]) rows[p.loserId].presiones -= Math.abs(p.total ?? bet);
+        if (rows[p.winnerId]) rows[p.winnerId].presiones += bet;
+        if (rows[p.loserId]) rows[p.loserId].presiones -= bet;
       });
     });
   }
 
-  // Parejas (bet paid per sub-match: best ball + worst ball)
+  // Parejas match — 3 vueltas
   if (gameConfigs.parejas?.active) {
     const bet = gameConfigs.parejas.bet_amount;
     parejasResults.forEach(m => {
-      const getPlayers = (pair: number) => pairings.find(p => p.pair_number === pair);
-      const pA = getPlayers(m.pairA);
-      const pB = getPlayers(m.pairB);
-      if (!pA || !pB) return;
-
-      // best ball sub-match
-      const bestEarned = m.bestTotal > 0 ? bet : m.bestTotal < 0 ? -bet : 0;
-      // worst ball sub-match
-      const worstEarned = m.worstTotal > 0 ? bet : m.worstTotal < 0 ? -bet : 0;
-      const total = bestEarned + worstEarned;
-
-      [pA.player1_id, pA.player2_id].forEach(id => {
-        if (rows[id]) rows[id].parejas += total;
-      });
-      [pB.player1_id, pB.player2_id].forEach(id => {
-        if (rows[id]) rows[id].parejas -= total;
-      });
+      for (const v of [m.primera, m.segunda, m.total]) {
+        const earned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
+        [m.playerA1, m.playerA2].forEach(id => { if (rows[id]) rows[id].parejas += earned; });
+        [m.playerB1, m.playerB2].forEach(id => { if (rows[id]) rows[id].parejas -= earned; });
+      }
     });
   }
 
-  // Pareja Base
+  // Parejas medal — 3 vueltas
+  if (gameConfigs.parejas_medal?.active) {
+    const bet = gameConfigs.parejas_medal.bet_amount;
+    parejasResults.forEach(m => {
+      for (const v of [m.primera, m.segunda, m.total]) {
+        const earned = v.medalA < v.medalB ? bet : v.medalA > v.medalB ? -bet : 0;
+        [m.playerA1, m.playerA2].forEach(id => { if (rows[id]) rows[id].parejas_medal += earned; });
+        [m.playerB1, m.playerB2].forEach(id => { if (rows[id]) rows[id].parejas_medal -= earned; });
+      }
+    });
+  }
+
+  // Pareja Base — match 3 vueltas
   if (gameConfigs.parejas_base?.active && basePair) {
     const bet = gameConfigs.parejas_base.bet_amount;
     parejaBaseResults.forEach(m => {
-      const baseIsA = m.playerA1 === basePair.player1_id || m.playerA1 === basePair.player2_id;
-      const bestEarned = m.bestTotal > 0 ? bet : m.bestTotal < 0 ? -bet : 0;
-      const worstEarned = m.worstTotal > 0 ? bet : m.worstTotal < 0 ? -bet : 0;
-      const total = bestEarned + worstEarned;
-
-      const baseSign = baseIsA ? 1 : -1;
-      [basePair.player1_id, basePair.player2_id].forEach(id => {
-        if (rows[id]) rows[id].parejas_base += baseSign * total;
-      });
-      const oppA1 = baseIsA ? m.playerB1 : m.playerA1;
-      const oppA2 = baseIsA ? m.playerB2 : m.playerA2;
-      [oppA1, oppA2].forEach(id => {
-        if (rows[id]) rows[id].parejas_base -= baseSign * total;
-      });
+      for (const v of [m.primera, m.segunda, m.total]) {
+        const earned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
+        [m.playerA1, m.playerA2].forEach(id => { if (rows[id]) rows[id].parejas_base += earned; });
+        [m.playerB1, m.playerB2].forEach(id => { if (rows[id]) rows[id].parejas_base -= earned; });
+      }
     });
   }
 
-  // Totals
   Object.values(rows).forEach(r => {
-    r.total = r.marcas + r.individuales + r.parejas + r.parejas_base + r.presiones;
+    r.total = r.marcas + r.marcas_esp + r.individuales + r.individuales_medal + r.parejas + r.parejas_medal + r.parejas_base + r.presiones;
   });
 
   return Object.values(rows);
@@ -443,6 +462,5 @@ export function calcDineros(
 export function getHoleOrder(startHole: 1 | 10, totalHoles = 18): number[] {
   const holes = Array.from({ length: totalHoles }, (_, i) => i + 1);
   if (startHole === 1) return holes;
-  // Start from hole 10: 10,11,...,18,1,2,...,9
   return [...holes.slice(9), ...holes.slice(0, 9)];
 }

@@ -104,16 +104,60 @@ function useScores(roundId: string) {
   return { scores, grossMap };
 }
 
+type MarcasEspMap = Record<string, Record<number, string>>;
+
+// ─── Special Marcas Hook ──────────────────────────────────────────────────────
+
+function useSpecialMarcas(roundId: string) {
+  const qc = useQueryClient();
+  const isValid = !!roundId && roundId !== 'players';
+
+  const { data: rows = [] } = useQuery<{ player_id: string; hole_number: number; nota: string }[]>({
+    queryKey: ['marcas_esp', roundId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('round_marcas')
+        .select('player_id, hole_number, nota')
+        .eq('round_id', roundId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: isValid,
+  });
+
+  useEffect(() => {
+    if (!isValid) return;
+    const uid = Math.random().toString(36).slice(2, 7);
+    const channel = supabase
+      .channel(`marcas-esp-${roundId}-${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'round_marcas', filter: `round_id=eq.${roundId}` },
+        () => qc.invalidateQueries({ queryKey: ['marcas_esp', roundId] })
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [roundId, qc, isValid]);
+
+  const marcasEspMap: MarcasEspMap = {};
+  rows.forEach(r => {
+    if (!marcasEspMap[r.player_id]) marcasEspMap[r.player_id] = {};
+    marcasEspMap[r.player_id][r.hole_number] = r.nota;
+  });
+
+  return { marcasEspMap };
+}
+
 // ─── Scorecard Tab ────────────────────────────────────────────────────────────
 
-function ScorecardTab({ round, holes, grossMap, holeOrder }: {
+function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   round: RoundData;
   holes: HoleInfo[];
   grossMap: ScoreMap;
+  marcasEspMap: MarcasEspMap;
   holeOrder: number[];
 }) {
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const [localScores, setLocalScores] = useState<ScoreMap>({});
+  const [localMarcas, setLocalMarcas] = useState<MarcasEspMap>({});
   const [saveErr, setSaveErr] = useState('');
 
   const players = [...round.round_players].sort((a, b) => a.position - b.position);
@@ -126,11 +170,35 @@ function ScorecardTab({ round, holes, grossMap, holeOrder }: {
         : '';
   };
 
+  const getMarcaValue = (pid: string, hole: number) => {
+    return localMarcas[pid]?.[hole] !== undefined
+      ? localMarcas[pid][hole]
+      : marcasEspMap[pid]?.[hole] ?? '';
+  };
+
   const handleChange = (pid: string, hole: number, val: string) => {
     setLocalScores(prev => ({
       ...prev,
       [pid]: { ...(prev[pid] ?? {}), [hole]: val === '' ? 0 : parseInt(val, 10) || 0 },
     }));
+  };
+
+  const handleMarcaChange = async (pid: string, hole: number, val: string) => {
+    setLocalMarcas(prev => ({
+      ...prev,
+      [pid]: { ...(prev[pid] ?? {}), [hole]: val },
+    }));
+    const n = parseInt(val, 10);
+    if (!val.trim() || n <= 0 || isNaN(n)) {
+      await supabase.from('round_marcas').delete()
+        .eq('round_id', round.id).eq('player_id', pid).eq('hole_number', hole);
+    } else {
+      const { error } = await supabase.from('round_marcas').upsert(
+        { round_id: round.id, player_id: pid, hole_number: hole, nota: String(n) },
+        { onConflict: 'round_id,player_id,hole_number' }
+      );
+      if (error) setSaveErr(error.message);
+    }
   };
 
   const handleBlur = useCallback(async (pid: string, hole: number) => {
@@ -143,6 +211,7 @@ function ScorecardTab({ round, holes, grossMap, holeOrder }: {
     if (error) setSaveErr(error.message);
   }, [localScores, round.id]);
 
+
   const holeMap: Record<number, HoleInfo> = {};
   holes.forEach(h => { holeMap[h.hole_number] = h; });
 
@@ -152,23 +221,30 @@ function ScorecardTab({ round, holes, grossMap, holeOrder }: {
 
   const COL_W = 52;
   const HOLE_COL_W = 44;
+  const V_COL_W = 32;
+  const MARCA_COL_W = 48;
+  const MARCA_LABEL_W = 20;
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
       {!!saveErr && (
         <View style={{ backgroundColor: '#FFEBEE', margin: 12, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
-          <Text style={{ color: Colors.error, fontWeight: '600' }}>⚠️ Error guardando score: {saveErr}</Text>
+          <Text style={{ color: Colors.error, fontWeight: '600' }}>⚠️ Error guardando: {saveErr}</Text>
         </View>
       )}
       <ScrollView horizontal showsHorizontalScrollIndicator>
         <View>
           {/* Header */}
-          <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingVertical: 10 }}>
+          <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingVertical: 10, alignItems: 'center' }}>
+            {/* Left: scores */}
             <View style={{ width: HOLE_COL_W, alignItems: 'center' }}>
               <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12 }}>H</Text>
             </View>
             <View style={{ width: 36, alignItems: 'center' }}>
               <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12 }}>Par</Text>
+            </View>
+            <View style={{ width: V_COL_W, alignItems: 'center' }}>
+              <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12 }}>V</Text>
             </View>
             {players.map(p => (
               <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', gap: 2 }}>
@@ -177,6 +253,15 @@ function ScorecardTab({ round, holes, grossMap, holeOrder }: {
                 </Text>
                 <Text style={{ color: Colors.greenLight, fontSize: 10 }}>
                   {relHcpMap[p.player_id] ?? 0}
+                </Text>
+              </View>
+            ))}
+            {/* Separator + Right: marcas */}
+            <View style={{ width: MARCA_LABEL_W, borderLeftWidth: 3, borderLeftColor: Colors.gold }} />
+            {players.map(p => (
+              <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
+                <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 12, textAlign: 'center' }} numberOfLines={1}>
+                  {p.players.name.split(' ')[0]}
                 </Text>
               </View>
             ))}
@@ -191,56 +276,126 @@ function ScorecardTab({ round, holes, grossMap, holeOrder }: {
             return (
               <View key={holeNum}>
                 <View style={{ flexDirection: 'row', backgroundColor: bg, paddingVertical: 2, alignItems: 'center' }}>
+                  {/* Left: hole info */}
                   <View style={{ width: HOLE_COL_W, alignItems: 'center' }}>
                     <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.text }}>{holeNum}</Text>
-                    {hole && <Text style={{ fontSize: 10, color: Colors.textSecondary }}>V{hole.handicap_rank}</Text>}
                   </View>
                   <View style={{ width: 36, alignItems: 'center' }}>
                     <Text style={{ fontSize: 14, color: Colors.textSecondary }}>{hole?.par ?? ''}</Text>
                   </View>
+                  <View style={{ width: V_COL_W, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, color: Colors.textSecondary }}>{hole?.handicap_rank ?? ''}</Text>
+                  </View>
+                  {/* Left: score inputs */}
+                  {players.map(p => {
+                    const ventaja = hole && hole.handicap_rank <= (relHcpMap[p.player_id] ?? 0);
+                    return (
+                      <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
+                        <TextInput
+                          ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
+                          value={getValue(p.player_id, holeNum)}
+                          onChangeText={v => handleChange(p.player_id, holeNum, v)}
+                          onBlur={() => handleBlur(p.player_id, holeNum)}
+                          keyboardType="number-pad"
+                          inputMode="numeric"
+                          maxLength={2}
+                          style={{
+                            width: 42,
+                            height: 38,
+                            backgroundColor: ventaja ? '#FFFF0066' : grossMap[p.player_id]?.[holeNum] ? Colors.greenLight + '33' : Colors.background,
+                            borderRadius: 8,
+                            textAlign: 'center',
+                            fontSize: 16,
+                            fontWeight: '700',
+                            color: Colors.text,
+                            borderWidth: 1,
+                            borderColor: localScores[p.player_id]?.[holeNum] ? Colors.gold : ventaja ? '#CCCC00' : Colors.border,
+                          }}
+                        />
+                      </View>
+                    );
+                  })}
+                  {/* Separator */}
+                  <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 3, borderLeftColor: Colors.gold + '88' }} />
+                  {/* Right: marca inputs */}
                   {players.map(p => (
-                    <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
+                    <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
                       <TextInput
-                        ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
-                        value={getValue(p.player_id, holeNum)}
-                        onChangeText={v => handleChange(p.player_id, holeNum, v)}
-                        onBlur={() => handleBlur(p.player_id, holeNum)}
+                        value={getMarcaValue(p.player_id, holeNum)}
+                        onChangeText={v => handleMarcaChange(p.player_id, holeNum, v)}
                         keyboardType="number-pad"
                         inputMode="numeric"
                         maxLength={2}
                         style={{
-                          width: 42,
+                          width: 40,
                           height: 38,
-                          backgroundColor: grossMap[p.player_id]?.[holeNum] ? Colors.greenLight + '33' : Colors.background,
+                          backgroundColor: marcasEspMap[p.player_id]?.[holeNum] ? Colors.gold + '33' : Colors.background,
                           borderRadius: 8,
                           textAlign: 'center',
-                          fontSize: 16,
+                          fontSize: 13,
                           fontWeight: '700',
                           color: Colors.text,
                           borderWidth: 1,
-                          borderColor: localScores[p.player_id]?.[holeNum] ? Colors.gold : Colors.border,
+                          borderColor: localMarcas[p.player_id]?.[holeNum] ? Colors.gold : Colors.border,
                         }}
                       />
                     </View>
                   ))}
                 </View>
                 {(isNinth || is18th) && (
-                  <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark + 'CC', paddingVertical: 6, alignItems: 'center' }}>
-                    <View style={{ width: HOLE_COL_W + 36, alignItems: 'center' }}>
-                      <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>{isNinth ? '1ª Vuelta' : 'Total'}</Text>
-                    </View>
-                    {players.map(p => {
-                      const halfHoles = isNinth
-                        ? holeOrder.slice(0, idx + 1)
-                        : holeOrder;
-                      const sum = halfHoles.reduce((s, h) => s + (grossMap[p.player_id]?.[h] ?? 0), 0);
+                  <>
+                    {is18th && (() => {
+                      const secondHalf = holeOrder.slice(9);
                       return (
-                        <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
-                          <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] }}>{sum || ''}</Text>
+                        <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark + '99', paddingVertical: 6, alignItems: 'center' }}>
+                          <View style={{ width: HOLE_COL_W + 36 + V_COL_W, alignItems: 'center' }}>
+                            <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>2ª Vuelta</Text>
+                          </View>
+                          {players.map(p => {
+                            const sum = secondHalf.reduce((s, h) => s + (grossMap[p.player_id]?.[h] ?? 0), 0);
+                            return (
+                              <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
+                                <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] }}>{sum || ''}</Text>
+                              </View>
+                            );
+                          })}
+                          <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 3, borderLeftColor: Colors.gold + '88' }} />
+                          {players.map(p => {
+                            const count = secondHalf.reduce((s, h) => s + (parseInt(marcasEspMap[p.player_id]?.[h] ?? '', 10) || 0), 0);
+                            return (
+                              <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
+                                <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] }}>{count > 0 ? count : ''}</Text>
+                              </View>
+                            );
+                          })}
                         </View>
                       );
-                    })}
-                  </View>
+                    })()}
+                    <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark + 'CC', paddingVertical: 6, alignItems: 'center' }}>
+                      <View style={{ width: HOLE_COL_W + 36 + V_COL_W, alignItems: 'center' }}>
+                        <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>{isNinth ? '1ª Vuelta' : 'Total'}</Text>
+                      </View>
+                      {players.map(p => {
+                        const halfHoles = isNinth ? holeOrder.slice(0, idx + 1) : holeOrder;
+                        const sum = halfHoles.reduce((s, h) => s + (grossMap[p.player_id]?.[h] ?? 0), 0);
+                        return (
+                          <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
+                            <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] }}>{sum || ''}</Text>
+                          </View>
+                        );
+                      })}
+                      <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 3, borderLeftColor: Colors.gold + '88' }} />
+                      {players.map(p => {
+                        const halfHoles = isNinth ? holeOrder.slice(0, idx + 1) : holeOrder;
+                        const count = halfHoles.reduce((s, h) => s + (parseInt(marcasEspMap[p.player_id]?.[h] ?? '', 10) || 0), 0);
+                        return (
+                          <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
+                            <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] }}>{count > 0 ? count : ''}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </>
                 )}
               </View>
             );
@@ -278,8 +433,8 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
     ? calcMarcas(netMap, playerIds, holeOrder.filter(h => holeOrder.indexOf(h) !== -1))
     : null;
 
-  const individualResults = gameConfigs.individuales?.active
-    ? calcIndividualAll(playerIds, netMap, holeOrder, gameConfigs.individuales.bet_amount, gameConfigs.presiones?.active ?? false)
+  const individualResults = gameConfigs.individuales?.active || gameConfigs.individuales_medal?.active
+    ? calcIndividualAll(playerIds, netMap, holeOrder, gameConfigs.presiones?.active ?? false)
     : [];
 
   const pairings: Pairing[] = round.round_pairings;
@@ -321,27 +476,58 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
       {/* Individual */}
       {individualResults.length > 0 && (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏌️ Individuales (Match)</Text>
-          {individualResults.map(r => (
-            <View key={r.matchup} style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 6 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text }}>
-                  {nameMap[r.playerA]} vs {nameMap[r.playerB]}
-                </Text>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: signColor(r.matchTotal), fontVariant: ['tabular-nums'] }}>
-                  {signStr(r.matchTotal)}
-                </Text>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏌️ Individuales</Text>
+          {individualResults.map(r => {
+            const vueltas = [
+              { label: '1ª Vuelta', v: r.primera },
+              { label: '2ª Vuelta', v: r.segunda },
+              { label: 'Total',     v: r.total    },
+            ] as const;
+            const allPresiones = [...r.primera.presiones, ...r.segunda.presiones];
+            return (
+              <View key={r.matchup} style={{ backgroundColor: Colors.card, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
+                <View style={{ backgroundColor: Colors.greenDark + '22', padding: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text }}>
+                    {nameMap[r.playerA]} vs {nameMap[r.playerB]}
+                  </Text>
+                  {allPresiones.length > 0 && (
+                    <Text style={{ fontSize: 12, color: Colors.warning, fontWeight: '700' }}>
+                      {allPresiones.length}P
+                    </Text>
+                  )}
+                </View>
+                {/* Header row */}
+                <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: 1, borderColor: Colors.border }}>
+                  <Text style={{ flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}> </Text>
+                  <Text style={{ width: 60, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MATCH</Text>
+                  <Text style={{ flex: 1, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MEDAL</Text>
+                </View>
+                {vueltas.map(({ label, v }) => {
+                  const presionesInVuelta = label !== 'Total'
+                    ? (label === '1ª Vuelta' ? r.primera.presiones : r.segunda.presiones)
+                    : [];
+                  return (
+                    <View key={label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border + '88' }}>
+                      <Text style={{ flex: 1, fontSize: 13, color: Colors.textSecondary }}>{label}</Text>
+                      <Text style={{ width: 60, textAlign: 'center', fontSize: 15, fontWeight: '800', color: signColor(v.matchAccum), fontVariant: ['tabular-nums'] }}>
+                        {v.matchAccum === 0 ? 'AS' : signStr(v.matchAccum)}
+                      </Text>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
+                          {v.medalA || '—'} / {v.medalB || '—'}
+                        </Text>
+                        {presionesInVuelta.length > 0 && (
+                          <Text style={{ fontSize: 11, color: Colors.warning }}>
+                            {presionesInVuelta.map(p => `P(h${p.startHole})`).join(' ')}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-              <Text style={{ fontSize: 12, color: Colors.textSecondary }}>
-                Medal: {nameMap[r.playerA]} {r.medalTotalA} · {nameMap[r.playerB]} {r.medalTotalB}
-              </Text>
-              {r.presiones.length > 0 && (
-                <Text style={{ fontSize: 12, color: Colors.warning }}>
-                  {r.presiones.length} presión(es) activa(s)
-                </Text>
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -349,23 +535,44 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
       {parejasResults.length > 0 && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>👥 Parejas</Text>
-          {parejasResults.map(m => (
-            <View key={`${m.pairA}-${m.pairB}`} style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 4 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary }}>Pareja {m.pairA} vs Pareja {m.pairB}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, color: Colors.text }}>Best Ball</Text>
-                <Text style={{ fontWeight: '700', color: signColor(m.bestTotal), fontVariant: ['tabular-nums'] }}>{signStr(m.bestTotal)}</Text>
+          {parejasResults.map(m => {
+            const vueltas = [
+              { label: '1ª Vuelta', v: m.primera },
+              { label: '2ª Vuelta', v: m.segunda },
+              { label: 'Total',     v: m.total   },
+            ] as const;
+            const pairings = round.round_pairings;
+            const pairName = (num: number) => {
+              const pair = pairings.find(p => p.pair_number === num);
+              if (!pair) return `Pareja ${num}`;
+              return `${nameMap[pair.player1_id]?.split(' ')[0]}/${nameMap[pair.player2_id]?.split(' ')[0]}`;
+            };
+            return (
+              <View key={`${m.pairA}-${m.pairB}`} style={{ backgroundColor: Colors.card, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
+                <View style={{ backgroundColor: Colors.greenDark + '22', padding: 10 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>
+                    {pairName(m.pairA)} vs {pairName(m.pairB)}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: 1, borderColor: Colors.border }}>
+                  <Text style={{ flex: 1, fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}> </Text>
+                  <Text style={{ width: 60, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MATCH</Text>
+                  <Text style={{ flex: 1, textAlign: 'center', fontSize: 11, color: Colors.textSecondary, fontWeight: '700' }}>MEDAL</Text>
+                </View>
+                {vueltas.map(({ label, v }) => (
+                  <View key={label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border + '88' }}>
+                    <Text style={{ flex: 1, fontSize: 13, color: Colors.textSecondary }}>{label}</Text>
+                    <Text style={{ width: 60, textAlign: 'center', fontSize: 15, fontWeight: '800', color: signColor(v.matchAccum), fontVariant: ['tabular-nums'] }}>
+                      {v.matchAccum === 0 ? 'AS' : signStr(v.matchAccum)}
+                    </Text>
+                    <Text style={{ flex: 1, textAlign: 'center', fontSize: 12, color: Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
+                      {v.medalA || '—'} / {v.medalB || '—'}
+                    </Text>
+                  </View>
+                ))}
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, color: Colors.text }}>Worst Ball</Text>
-                <Text style={{ fontWeight: '700', color: signColor(m.worstTotal), fontVariant: ['tabular-nums'] }}>{signStr(m.worstTotal)}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: Colors.border, paddingTop: 6, marginTop: 2 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text }}>Total</Text>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: signColor(m.totalResult), fontVariant: ['tabular-nums'] }}>{signStr(m.totalResult)}</Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -373,17 +580,30 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
       {parejaBaseResults.length > 0 && basePairData && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏆 Pareja Base</Text>
-          {parejaBaseResults.map((m, i) => (
-            <View key={i} style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 4 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary }}>
-                {nameMap[basePairData.player1_id]}/{nameMap[basePairData.player2_id]} vs Pareja {m.pairB}
-              </Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text }}>Total</Text>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: signColor(m.totalResult), fontVariant: ['tabular-nums'] }}>{signStr(m.totalResult)}</Text>
+          {parejaBaseResults.map((m, i) => {
+            const vueltas = [
+              { label: '1ª Vuelta', v: m.primera },
+              { label: '2ª Vuelta', v: m.segunda },
+              { label: 'Total',     v: m.total   },
+            ] as const;
+            return (
+              <View key={i} style={{ backgroundColor: Colors.card, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}>
+                <View style={{ backgroundColor: Colors.greenDark + '22', padding: 10 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }}>
+                    {nameMap[basePairData.player1_id]}/{nameMap[basePairData.player2_id]} vs Pareja {m.pairB}
+                  </Text>
+                </View>
+                {vueltas.map(({ label, v }) => (
+                  <View key={label} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border + '88' }}>
+                    <Text style={{ flex: 1, fontSize: 13, color: Colors.textSecondary }}>{label}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: signColor(v.matchAccum), fontVariant: ['tabular-nums'] }}>
+                      {v.matchAccum === 0 ? 'AS' : signStr(v.matchAccum)}
+                    </Text>
+                  </View>
+                ))}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -399,10 +619,11 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
 
 // ─── Dineros Tab ─────────────────────────────────────────────────────────────
 
-function DinerosTab({ round, holes, grossMap, holeOrder }: {
+function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   round: RoundData;
   holes: HoleInfo[];
   grossMap: ScoreMap;
+  marcasEspMap: MarcasEspMap;
   holeOrder: number[];
 }) {
   const players = [...round.round_players].sort((a, b) => a.position - b.position);
@@ -420,20 +641,36 @@ function DinerosTab({ round, holes, grossMap, holeOrder }: {
   players.forEach(p => { nameMap[p.player_id] = p.players.name; });
 
   const marcas = calcMarcas(netMap, playerIds, holeOrder);
-  const individualResults = calcIndividualAll(playerIds, netMap, holeOrder, gameConfigs.individuales?.bet_amount ?? 25, gameConfigs.presiones?.active ?? false);
+  const individualResults = calcIndividualAll(playerIds, netMap, holeOrder, gameConfigs.presiones?.active ?? false);
   const pairings: Pairing[] = round.round_pairings;
   const parejasResults = pairings.length >= 2 ? calcParejas(pairings, netMap, holeOrder) : [];
   const basePairData = round.round_base_pair?.[0] ?? null;
   const otherPairings = pairings.filter(p => basePairData ? !(p.player1_id === basePairData.player1_id && p.player2_id === basePairData.player2_id) : true);
   const parejaBaseResults = basePairData ? calcParejaBase(basePairData, otherPairings, netMap, holeOrder) : [];
 
-  const dineros = calcDineros(playerIds, gameConfigs, marcas, individualResults, parejasResults, parejaBaseResults, pairings, basePairData);
+  const baseDineros = calcDineros(playerIds, gameConfigs, marcas, individualResults, parejasResults, parejaBaseResults, pairings, basePairData);
+
+  // Marcas especiales: each entry earns (n-1)×bet from others; each other player pays bet per entry
+  const n = playerIds.length;
+  const marcasEspBet = gameConfigs.marcas_esp?.active ? (gameConfigs.marcas_esp.bet_amount ?? 0) : 0;
+  const marcasEspCount: Record<string, number> = {};
+  playerIds.forEach(id => {
+    marcasEspCount[id] = Object.values(marcasEspMap[id] ?? {}).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+  });
+  const totalMarcasEsp = playerIds.reduce((s, id) => s + marcasEspCount[id], 0);
+  const dineros = baseDineros.map(row => {
+    const myCount = marcasEspCount[row.player_id] ?? 0;
+    const marcasEspAmt = marcasEspBet > 0
+      ? myCount * (n - 1) * marcasEspBet - (totalMarcasEsp - myCount) * marcasEspBet
+      : 0;
+    return { ...row, marcas_esp: marcasEspAmt, total: row.total + marcasEspAmt };
+  });
 
   function fmt(n: number) { return (n >= 0 ? '+' : '') + `$${Math.abs(n).toLocaleString('es-MX')}`; }
   function color(n: number) { return n > 0 ? Colors.success : n < 0 ? Colors.error : Colors.textSecondary; }
 
-  const activeGames = ['marcas', 'individuales', 'parejas', 'parejas_base', 'presiones'].filter(g => gameConfigs[g]?.active);
-  const gameLabels: Record<string, string> = { marcas: 'Marcas', individuales: 'Individual', parejas: 'Parejas', parejas_base: 'P. Base', presiones: 'Presiones' };
+  const activeGames = ['marcas_esp', 'marcas', 'individuales', 'individuales_medal', 'parejas', 'parejas_medal', 'parejas_base', 'presiones'].filter(g => gameConfigs[g]?.active);
+  const gameLabels: Record<string, string> = { marcas: 'Plumas', marcas_esp: 'Marcas', individuales: 'I.Match', individuales_medal: 'I.Medal', parejas: 'P.Match', parejas_medal: 'P.Medal', parejas_base: 'P.Base', presiones: 'Presiones' };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
@@ -489,6 +726,7 @@ export default function RoundScreen() {
   const { data: round, isLoading: loadingRound } = useRoundData(id);
   const { data: holes = [], isLoading: loadingHoles } = useCourseHoles(round?.course_id ?? '');
   const { grossMap } = useScores(id);
+  const { marcasEspMap } = useSpecialMarcas(id);
 
   // Guard after all hooks — redirect if routing leaked a non-UUID segment here
   if (id === 'players') return <Redirect href="/(app)/(players)" />;
@@ -531,9 +769,9 @@ export default function RoundScreen() {
       </View>
 
       {/* Content */}
-      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} holeOrder={holeOrder} />}
+      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
       {activeTab === 'Resultados' && <ResultadosTab round={round} holes={holes} grossMap={grossMap} holeOrder={holeOrder} />}
-      {activeTab === 'Dineros' && <DinerosTab round={round} holes={holes} grossMap={grossMap} holeOrder={holeOrder} />}
+      {activeTab === 'Dineros' && <DinerosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
     </View>
   );
 }
