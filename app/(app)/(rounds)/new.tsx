@@ -9,7 +9,7 @@ type Course = { id: string; name: string };
 type Player = { id: string; name: string; default_handicap: number };
 type RoundPlayer = { player_id: string; name: string; handicap: number };
 type GameConfig = { active: boolean; bet_amount: number };
-type GameKey = 'marcas' | 'marcas_esp' | 'individuales' | 'individuales_medal' | 'parejas' | 'parejas_medal' | 'parejas_base' | 'presiones';
+type GameKey = 'marcas' | 'marcas_esp' | 'individuales' | 'individuales_medal' | 'parejas' | 'parejas_medal' | 'parejas_base' | 'parejas_base_medal' | 'presiones';
 
 const GAME_LABELS: Record<GameKey, string> = {
   marcas: 'Plumas (hoyo neto)',
@@ -18,7 +18,8 @@ const GAME_LABELS: Record<GameKey, string> = {
   individuales_medal: 'Individuales Medal',
   parejas: 'Parejas Match',
   parejas_medal: 'Parejas Medal',
-  parejas_base: 'Pareja Base',
+  parejas_base: 'Pareja Base Match',
+  parejas_base_medal: 'Pareja Base Medal',
   presiones: 'Presiones',
 };
 
@@ -26,6 +27,7 @@ const GAME_LABELS: Record<GameKey, string> = {
 const GAME_INDENT: Partial<Record<GameKey, true>> = {
   individuales_medal: true,
   parejas_medal: true,
+  parejas_base_medal: true,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -72,6 +74,7 @@ export default function NewRound() {
     parejas:            { active: false, bet_amount: 50  },
     parejas_medal:      { active: false, bet_amount: 50  },
     parejas_base:       { active: false, bet_amount: 50  },
+    parejas_base_medal: { active: false, bet_amount: 50  },
     presiones:          { active: false, bet_amount: 0   },
   });
   const [pairings, setPairings] = useState<{ pair_number: number; p1: string; p2: string }[]>([]);
@@ -173,7 +176,7 @@ export default function NewRound() {
     if (!courseId) { setErrorMsg('Selecciona un campo'); return; }
     if (players.length < 2) { setErrorMsg('Agrega al menos 2 jugadores'); return; }
     if (games.parejas.active && pairings.length < 2) { setErrorMsg('Necesitas al menos 2 parejas para Juego Parejas'); return; }
-    if (games.parejas_base.active && !basePair) { setErrorMsg('Selecciona la Pareja Base'); return; }
+    if ((games.parejas_base.active || games.parejas_base_medal.active) && !basePair) { setErrorMsg('Selecciona la Pareja Base'); return; }
 
     setSaving(true);
     try {

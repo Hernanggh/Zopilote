@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Switch } from 'react-native';
 import { Stack, useLocalSearchParams, Redirect, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/colors';
 import {
   calcRelativeHandicaps, buildNetScoreMap, calcMarcas, calcIndividualAll,
-  calcParejas, calcParejaBase, calcDineros, getHoleOrder,
+  calcParejas, calcParejaBase, calcDineros,
   type HoleInfo, type ScoreEntry, type Pairing,
 } from '@/lib/calculations';
 
@@ -42,7 +42,12 @@ function useRoundData(id: string) {
         .eq('id', id)
         .single();
       if (error) throw error;
-      return data as unknown as RoundData;
+      const d = data as unknown as RoundData;
+      // Supabase returns 1:1 unique FK as object, normalize to array
+      if (d.round_base_pair && !Array.isArray(d.round_base_pair)) {
+        (d as any).round_base_pair = [d.round_base_pair];
+      }
+      return d;
     },
     enabled: !!id && id !== 'players',
   });
@@ -156,6 +161,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
   holeOrder: number[];
   readonly: boolean;
 }) {
+  const qc = useQueryClient();
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const [localScores, setLocalScores] = useState<ScoreMap>({});
   const [localMarcas, setLocalMarcas] = useState<MarcasEspMap>({});
@@ -191,8 +197,10 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
     }));
     const n = parseInt(val, 10);
     if (!val.trim() || n <= 0 || isNaN(n)) {
-      await supabase.from('round_marcas').delete()
+      const { error } = await supabase.from('round_marcas').delete()
         .eq('round_id', round.id).eq('player_id', pid).eq('hole_number', hole);
+      if (error) setSaveErr(error.message);
+      else await qc.invalidateQueries({ queryKey: ['marcas_esp', round.id] });
     } else {
       const { error } = await supabase.from('round_marcas').upsert(
         { round_id: round.id, player_id: pid, hole_number: hole, nota: String(n) },
@@ -278,8 +286,8 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
           {/* Holes */}
           {holeOrder.map((holeNum, idx) => {
             const hole = holeMap[holeNum];
-            const isNinth = (round.start_hole === 1 && holeNum === 9) || (round.start_hole === 10 && holeNum === 18);
-            const is18th = (round.start_hole === 1 && holeNum === 18) || (round.start_hole === 10 && holeNum === 9);
+            const isNinth = holeNum === 9;
+            const is18th = holeNum === 18;
             const bg = idx % 2 === 0 ? Colors.card : Colors.background;
             return (
               <View key={holeNum}>
@@ -418,10 +426,11 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
 
 // ─── Resultados Tab ──────────────────────────────────────────────────────────
 
-function ResultadosTab({ round, holes, grossMap, holeOrder }: {
+function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   round: RoundData;
   holes: HoleInfo[];
   grossMap: ScoreMap;
+  marcasEspMap: MarcasEspMap;
   holeOrder: number[];
 }) {
   const players = [...round.round_players].sort((a, b) => a.position - b.position);
@@ -454,11 +463,9 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
     : [];
 
   const basePairData = round.round_base_pair?.[0] ?? null;
-  const otherPairings = pairings.filter(p =>
-    basePairData ? !(p.player1_id === basePairData.player1_id && p.player2_id === basePairData.player2_id) : true
-  );
-  const parejaBaseResults = gameConfigs.parejas_base?.active && basePairData
-    ? calcParejaBase(basePairData, otherPairings, netMap, holeOrder)
+  const rivalPairs: Pairing[] = basePairData ? genRivalPairs(playerIds, basePairData) : [];
+  const parejaBaseResults = (gameConfigs.parejas_base?.active || gameConfigs.parejas_base_medal?.active) && basePairData
+    ? calcParejaBase(basePairData, rivalPairs, netMap, holeOrder)
     : [];
 
   const COL_W = 54;
@@ -512,11 +519,11 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
   }
 
   const pairIds = [...new Set(parejasResults.flatMap(m => [m.pairA, m.pairB]))].sort((a, b) => a - b);
-  const pairName = (num: number) => {
+  const pairName = (num: number, extra?: Pairing[]) => {
     if (num === 0 && basePairData) {
       return `${nameMap[basePairData.player1_id]?.split(' ')[0]}\n${nameMap[basePairData.player2_id]?.split(' ')[0]}`;
     }
-    const pair = pairings.find(p => p.pair_number === num);
+    const pair = [...pairings, ...(extra ?? [])].find(p => p.pair_number === num);
     if (!pair) return `P${num}`;
     return `${nameMap[pair.player1_id]?.split(' ')[0]}\n${nameMap[pair.player2_id]?.split(' ')[0]}`;
   };
@@ -532,14 +539,26 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
         <View style={{ gap: 8 }}>
           <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🦚 Marcas / Plumas</Text>
           <View style={{ backgroundColor: Colors.card, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
-            {playerIds.map((id, i) => (
-              <View key={id} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 12, backgroundColor: i % 2 === 0 ? Colors.card : Colors.background }}>
-                <Text style={{ fontSize: 14, color: Colors.text }}>{nameMap[id]}</Text>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text, fontVariant: ['tabular-nums'] }}>
-                  {marcas.totals[id] ?? 0} plumas
-                </Text>
-              </View>
-            ))}
+            {/* Header */}
+            <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 12, paddingVertical: 8 }}>
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: Colors.white }}>Jugador</Text>
+              <Text style={{ width: 70, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.greenLight }}>Plumas</Text>
+              <Text style={{ width: 70, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.gold }}>Marcas</Text>
+            </View>
+            {playerIds.map((id, i) => {
+              const marcasEspTotal = Object.values(marcasEspMap[id] ?? {}).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+              return (
+                <View key={id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: i % 2 === 0 ? Colors.card : Colors.background }}>
+                  <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{nameMap[id]}</Text>
+                  <Text style={{ width: 70, textAlign: 'center', fontSize: 14, fontWeight: '700', color: Colors.text, fontVariant: ['tabular-nums'] }}>
+                    {marcas.totals[id] ?? 0}
+                  </Text>
+                  <Text style={{ width: 70, textAlign: 'center', fontSize: 14, fontWeight: '700', color: marcasEspTotal > 0 ? Colors.gold : Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
+                    {marcasEspTotal > 0 ? marcasEspTotal : '—'}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         </View>
       )}
@@ -677,11 +696,15 @@ function ResultadosTab({ round, holes, grossMap, holeOrder }: {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
-                <View style={{ width: ROW_H_W, padding: 8 }} />
+                <View style={{ width: ROW_H_W, padding: 8, justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.gold, textAlign: 'center' }} numberOfLines={2}>
+                    {nameMap[basePairData!.player1_id]?.split(' ')[0]}{'\n'}{nameMap[basePairData!.player2_id]?.split(' ')[0]}
+                  </Text>
+                </View>
                 {parejaBaseResults.map(m => (
                   <View key={m.pairB} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
-                      {pairName(m.pairB)}
+                      {pairName(m.pairB, rivalPairs)}
                     </Text>
                   </View>
                 ))}
@@ -754,8 +777,8 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   const pairings: Pairing[] = round.round_pairings;
   const parejasResults = pairings.length >= 2 ? calcParejas(pairings, netMap, holeOrder) : [];
   const basePairData = round.round_base_pair?.[0] ?? null;
-  const otherPairings = pairings.filter(p => basePairData ? !(p.player1_id === basePairData.player1_id && p.player2_id === basePairData.player2_id) : true);
-  const parejaBaseResults = basePairData ? calcParejaBase(basePairData, otherPairings, netMap, holeOrder) : [];
+  const rivalPairsDineros: Pairing[] = basePairData ? genRivalPairs(playerIds, basePairData) : [];
+  const parejaBaseResults = basePairData ? calcParejaBase(basePairData, rivalPairsDineros, netMap, holeOrder) : [];
 
   const baseDineros = calcDineros(playerIds, gameConfigs, marcas, individualResults, parejasResults, parejaBaseResults, pairings, basePairData);
 
@@ -780,10 +803,11 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
 
   // Columnas consolidadas: agrupa juegos relacionados
   const colGroups = [
-    { key: 'marcas_col',  label: 'Marcas',    fields: ['marcas_esp', 'marcas'] },
-    { key: 'ind_col',     label: 'Individual', fields: ['individuales', 'individuales_medal', 'presiones'] },
-    { key: 'parejas_col', label: 'Parejas',   fields: ['parejas', 'parejas_medal'] },
-    { key: 'base_col',    label: 'P.Base',    fields: ['parejas_base'] },
+    { key: 'marcas_col',    label: 'Marcas',     fields: ['marcas_esp', 'marcas'] },
+    { key: 'ind_col',       label: 'Individual',  fields: ['individuales', 'individuales_medal'] },
+    { key: 'presiones_col', label: 'Presiones',  fields: ['presiones'] },
+    { key: 'parejas_col',   label: 'Parejas',    fields: ['parejas', 'parejas_medal'] },
+    { key: 'base_col',      label: 'P.Base',     fields: ['parejas_base', 'parejas_base_medal'] },
   ].filter(g => g.fields.some(f => gameConfigs[f]?.active));
 
   function groupVal(row: typeof dineros[0], fields: string[]) {
@@ -833,6 +857,25 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   );
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function genRivalPairs(playerIds: string[], basePair: { player1_id: string; player2_id: string }): Pairing[] {
+  const others = playerIds.filter(id => id !== basePair.player1_id && id !== basePair.player2_id);
+  const pairs: Pairing[] = [];
+  let n = 1;
+  for (let i = 0; i < others.length; i++)
+    for (let j = i + 1; j < others.length; j++)
+      pairs.push({ pair_number: n++, player1_id: others[i], player2_id: others[j] });
+  return pairs;
+}
+
+const ALL_GAME_KEYS = ['marcas', 'marcas_esp', 'individuales', 'individuales_medal', 'parejas', 'parejas_medal', 'parejas_base', 'parejas_base_medal', 'presiones'];
+const GAME_LABELS_SETUP: Record<string, string> = {
+  marcas: 'Plumas', marcas_esp: 'Marcas Especiales', individuales: 'Individuales Match',
+  individuales_medal: 'Individuales Medal', parejas: 'Parejas Match', parejas_medal: 'Parejas Medal',
+  parejas_base: 'Pareja Base Match', parejas_base_medal: 'Pareja Base Medal', presiones: 'Presiones',
+};
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 const TABS = ['Scorecard', 'Resultados', 'Dineros'] as const;
@@ -844,6 +887,13 @@ export default function RoundScreen() {
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>('Scorecard');
   const [confirmModal, setConfirmModal] = useState<'finish' | 'pause' | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupGames, setSetupGames] = useState<Record<string, { active: boolean; bet_amount: number }>>({});
+  const [setupHandicaps, setSetupHandicaps] = useState<Record<string, number>>({});
+  const [setupPairings, setSetupPairings] = useState<{ pair_number: number; p1: string; p2: string }[]>([]);
+  const [setupBasePair, setSetupBasePair] = useState<{ p1: string; p2: string } | null>(null);
+  const [setupSaving, setSetupSaving] = useState(false);
+  const [setupErr, setSetupErr] = useState('');
 
   const { data: round, isLoading: loadingRound } = useRoundData(id);
   const { data: holes = [], isLoading: loadingHoles } = useCourseHoles(round?.course_id ?? '');
@@ -869,7 +919,7 @@ export default function RoundScreen() {
     );
   }
 
-  const holeOrder = getHoleOrder(round.start_hole as 1 | 10);
+  const holeOrder = Array.from({ length: 18 }, (_, i) => i + 1);
   const isActive = round.status === 'active' || round.status === 'setup';
 
   async function doFinish() {
@@ -888,6 +938,71 @@ export default function RoundScreen() {
   async function doEdit() {
     await supabase.from('rounds').update({ status: 'active' }).eq('id', id);
     qc.invalidateQueries({ queryKey: ['round', id] });
+  }
+
+  function openSetup() {
+    const configs: Record<string, { active: boolean; bet_amount: number }> = {};
+    ALL_GAME_KEYS.forEach(k => { configs[k] = { active: false, bet_amount: 0 }; });
+    round.round_game_config.forEach(g => { configs[g.game_type] = { active: g.active, bet_amount: g.bet_amount }; });
+    setSetupGames(configs);
+    const hcps: Record<string, number> = {};
+    round.round_players.forEach(p => { hcps[p.player_id] = p.handicap; });
+    setSetupHandicaps(hcps);
+    setSetupPairings(round.round_pairings.map(p => ({ pair_number: p.pair_number, p1: p.player1_id, p2: p.player2_id })));
+    const bp = round.round_base_pair?.[0];
+    setSetupBasePair(bp ? { p1: bp.player1_id, p2: bp.player2_id } : null);
+    setSetupErr('');
+    setShowSetup(true);
+  }
+
+  async function saveSetup() {
+    setSetupSaving(true);
+    setSetupErr('');
+    const allErrs: string[] = [];
+
+    const gameResults = await Promise.all(
+      ALL_GAME_KEYS.map(k =>
+        supabase.from('round_game_config').upsert(
+          { round_id: id, game_type: k, active: setupGames[k]?.active ?? false, bet_amount: setupGames[k]?.bet_amount ?? 0 },
+          { onConflict: 'round_id,game_type' }
+        )
+      )
+    );
+    gameResults.forEach(r => { if (r.error) allErrs.push(r.error.message); });
+
+    const hcpResults = await Promise.all(
+      Object.entries(setupHandicaps).map(([pid, hcp]) =>
+        supabase.from('round_players').update({ handicap: hcp }).eq('round_id', id).eq('player_id', pid)
+      )
+    );
+    hcpResults.forEach(r => { if (r.error) allErrs.push(r.error.message); });
+
+    const { error: delPairErr } = await supabase.from('round_pairings').delete().eq('round_id', id);
+    if (delPairErr) { allErrs.push(delPairErr.message); }
+    else if (setupPairings.length > 0) {
+      const { error: insPairErr } = await supabase.from('round_pairings').insert(
+        setupPairings.map(p => ({ round_id: id, pair_number: p.pair_number, player1_id: p.p1, player2_id: p.p2 }))
+      );
+      if (insPairErr) allErrs.push(insPairErr.message);
+    }
+
+    const { error: delBpErr } = await supabase.from('round_base_pair').delete().eq('round_id', id);
+    if (delBpErr) { allErrs.push(delBpErr.message); }
+    else if (setupBasePair?.p1 && setupBasePair?.p2) {
+      const { error: insBpErr } = await supabase.from('round_base_pair').insert(
+        { round_id: id, player1_id: setupBasePair.p1, player2_id: setupBasePair.p2 }
+      );
+      if (insBpErr) allErrs.push(insBpErr.message);
+    }
+
+    // Always refresh cache so UI reflects whatever was saved
+    await qc.invalidateQueries({ queryKey: ['round', id] });
+    setSetupSaving(false);
+    if (allErrs.length > 0) {
+      setSetupErr(allErrs[0]);
+    } else {
+      setShowSetup(false);
+    }
   }
 
   const MODAL_CONFIG = {
@@ -942,7 +1057,10 @@ export default function RoundScreen() {
           </Pressable>
         ))}
         {isActive ? (
-          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10, alignItems: 'center' }}>
+            <Pressable onPress={openSetup} style={{ paddingHorizontal: 6, paddingVertical: 6 }}>
+              <Text style={{ fontSize: 18 }}>⚙️</Text>
+            </Pressable>
             <Pressable
               onPress={() => setConfirmModal('pause')}
               style={{ backgroundColor: Colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
@@ -957,7 +1075,10 @@ export default function RoundScreen() {
             </Pressable>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10, alignItems: 'center' }}>
+            <Pressable onPress={openSetup} style={{ paddingHorizontal: 6, paddingVertical: 6 }}>
+              <Text style={{ fontSize: 18 }}>⚙️</Text>
+            </Pressable>
             <Pressable
               onPress={() => router.replace('/')}
               style={{ backgroundColor: Colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
@@ -975,9 +1096,168 @@ export default function RoundScreen() {
       </View>
 
       {/* Content */}
-      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} readonly={!isActive} />}
-      {activeTab === 'Resultados' && <ResultadosTab round={round} holes={holes} grossMap={grossMap} holeOrder={holeOrder} />}
+      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={Array.from({ length: 18 }, (_, i) => i + 1)} readonly={!isActive} />}
+      {activeTab === 'Resultados' && <ResultadosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
       {activeTab === 'Dineros' && <DinerosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
+
+      {/* Setup modal */}
+      {showSetup && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 200 }}>
+          <View style={{ flex: 1, backgroundColor: Colors.background, marginTop: 60, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: Colors.card, borderBottomWidth: 1, borderColor: Colors.border }}>
+              <Pressable onPress={() => setShowSetup(false)}>
+                <Text style={{ fontSize: 16, color: Colors.textSecondary }}>Cancelar</Text>
+              </Pressable>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.text }}>Configuración</Text>
+              <Pressable onPress={saveSetup} disabled={setupSaving}>
+                {setupSaving
+                  ? <ActivityIndicator size="small" color={Colors.green} />
+                  : <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.green }}>Guardar</Text>}
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 24, paddingBottom: 40 }}>{(() => {
+              const sortedPlayers = [...round.round_players].sort((a, b) => a.position - b.position);
+              const playerOpts = sortedPlayers.map(p => ({ label: p.players.name, value: p.player_id }));
+              const needsPairings = setupGames.parejas?.active;
+              const needsBasePair = setupGames.parejas_base?.active || setupGames.parejas_base_medal?.active;
+              return (
+                <>
+                  {!!setupErr && (
+                    <View style={{ backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
+                      <Text style={{ color: Colors.error, fontWeight: '600', fontSize: 13 }}>⚠️ {setupErr}</Text>
+                    </View>
+                  )}
+
+                  {/* Juegos */}
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>JUEGOS Y APUESTAS</Text>
+                    {ALL_GAME_KEYS.map(k => (
+                      <View key={k} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
+                        <Switch
+                          value={setupGames[k]?.active ?? false}
+                          onValueChange={v => setSetupGames(prev => ({ ...prev, [k]: { ...prev[k], active: v } }))}
+                          trackColor={{ false: Colors.border, true: Colors.green }}
+                        />
+                        <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{GAME_LABELS_SETUP[k]}</Text>
+                        {k !== 'presiones' && (
+                          <>
+                            <TextInput
+                              value={String(setupGames[k]?.bet_amount ?? 0)}
+                              onChangeText={v => setSetupGames(prev => ({ ...prev, [k]: { ...prev[k], bet_amount: parseInt(v, 10) || 0 } }))}
+                              keyboardType="number-pad"
+                              style={{ width: 72, textAlign: 'right', fontSize: 15, fontWeight: '700', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, padding: 6, borderWidth: 1, borderColor: Colors.border }}
+                            />
+                            <Text style={{ fontSize: 12, color: Colors.textSecondary }}>$</Text>
+                          </>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Parejas */}
+                  {needsPairings && (
+                    <View style={{ gap: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>ASIGNACIÓN DE PAREJAS</Text>
+                      {setupPairings.map((pair, idx) => (
+                        <View key={idx} style={{ backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary }}>PAREJA {pair.pair_number}</Text>
+                            <Pressable onPress={() => setSetupPairings(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, pair_number: i + 1 })))}>
+                              <Text style={{ fontSize: 18, color: Colors.error }}>×</Text>
+                            </Pressable>
+                          </View>
+                          {(['p1', 'p2'] as const).map((field, fi) => (
+                            <View key={field} style={{ gap: 4 }}>
+                              <Text style={{ fontSize: 11, color: Colors.textSecondary }}>Jugador {fi + 1}</Text>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                {playerOpts.map(opt => {
+                                  const isSelected = pair[field] === opt.value;
+                                  const other = field === 'p1' ? pair.p2 : pair.p1;
+                                  const usedElsewhere = setupPairings.filter((_, i) => i !== idx).some(p => p.p1 === opt.value || p.p2 === opt.value);
+                                  const disabled = other === opt.value || usedElsewhere;
+                                  return (
+                                    <Pressable
+                                      key={opt.value}
+                                      disabled={disabled && !isSelected}
+                                      onPress={() => setSetupPairings(prev => prev.map((p, i) => i === idx ? { ...p, [field]: opt.value } : p))}
+                                      style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: isSelected ? Colors.green : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.green : Colors.border, opacity: disabled && !isSelected ? 0.3 : 1 }}
+                                    >
+                                      <Text style={{ fontSize: 13, color: isSelected ? Colors.white : Colors.text, fontWeight: isSelected ? '700' : '400' }}>{opt.label.split(' ')[0]}</Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      ))}
+                      {setupPairings.length < 3 && (
+                        <Pressable
+                          onPress={() => {
+                            const used = setupPairings.flatMap(p => [p.p1, p.p2]);
+                            const avail = sortedPlayers.filter(p => !used.includes(p.player_id));
+                            setSetupPairings(prev => [...prev, { pair_number: prev.length + 1, p1: avail[0]?.player_id ?? '', p2: avail[1]?.player_id ?? '' }]);
+                          }}
+                          style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.green, borderRadius: 10, padding: 12, alignItems: 'center' }}
+                        >
+                          <Text style={{ color: Colors.green, fontWeight: '600' }}>+ Pareja {setupPairings.length + 1}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Pareja Base */}
+                  {needsBasePair && (
+                    <View style={{ gap: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>PAREJA BASE</Text>
+                      <View style={{ backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.greenDark + '66', gap: 10 }}>
+                        {(['p1', 'p2'] as const).map((field, fi) => (
+                          <View key={field} style={{ gap: 4 }}>
+                            <Text style={{ fontSize: 11, color: Colors.textSecondary }}>Jugador {fi + 1}</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                              {playerOpts.map(opt => {
+                                const isSelected = setupBasePair?.[field] === opt.value;
+                                const other = field === 'p1' ? setupBasePair?.p2 : setupBasePair?.p1;
+                                return (
+                                  <Pressable
+                                    key={opt.value}
+                                    disabled={other === opt.value}
+                                    onPress={() => setSetupBasePair(prev => ({ ...(prev ?? { p1: '', p2: '' }), [field]: opt.value }))}
+                                    style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.greenDark : Colors.border, opacity: other === opt.value ? 0.3 : 1 }}
+                                  >
+                                    <Text style={{ fontSize: 13, color: isSelected ? Colors.white : Colors.text, fontWeight: isSelected ? '700' : '400' }}>{opt.label.split(' ')[0]}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Handicaps */}
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>HANDICAPS</Text>
+                    {sortedPlayers.map(p => (
+                      <View key={p.player_id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border }}>
+                        <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{p.players.name}</Text>
+                        <TextInput
+                          value={String(setupHandicaps[p.player_id] ?? p.handicap)}
+                          onChangeText={v => setSetupHandicaps(prev => ({ ...prev, [p.player_id]: parseInt(v, 10) || 0 }))}
+                          keyboardType="number-pad"
+                          style={{ width: 64, textAlign: 'center', fontSize: 16, fontWeight: '700', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, padding: 6, borderWidth: 1, borderColor: Colors.border }}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                </>
+              );
+            })()}
+            </ScrollView>
+          </View>
+        </View>
+      )}
 
       {/* Confirmation modal */}
       {confirmModal && (

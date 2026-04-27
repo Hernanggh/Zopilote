@@ -58,6 +58,7 @@ export type DinerosRow = {
   parejas: number;
   parejas_medal: number;
   parejas_base: number;
+  parejas_base_medal: number;
   presiones: number;
   total: number;
 };
@@ -181,20 +182,20 @@ function calcVuelta(
     // remainingAfter = hoyos que quedan después del hoyo actual en esta vuelta
     const remainingAfter = vueltaHoles.length - 1 - i;
 
-    // P1: activa cuando el líder tiene ventaja mayor que hoyos restantes (inalcanzable)
-    if (!presion1 && remainingAfter > 0 && Math.abs(matchAccum) > remainingAfter) {
+    // P1: se dispara cuando el líder es inalcanzable; el hoyo disparador NO cuenta en P1
+    const p1JustCreated = !presion1 && remainingAfter > 0 && Math.abs(matchAccum) > remainingAfter;
+    if (p1JustCreated) {
       presion1 = { startHole: hole, byHole: {}, accum: 0 };
     }
 
-    if (presion1) {
+    if (presion1 && !p1JustCreated) {
       presion1.accum += holeResult;
       presion1.byHole[hole] = { result: holeResult, accum: presion1.accum };
 
-      // P2: activa cuando dentro de P1 el líder también tiene ventaja inalcanzable
-      if (!presion2 && remainingAfter > 0 && Math.abs(presion1.accum) > remainingAfter) {
+      // P2: mismo criterio dentro del sub-partido de P1; hoyo disparador tampoco cuenta
+      const p2JustCreated = !presion2 && remainingAfter > 0 && Math.abs(presion1.accum) > remainingAfter;
+      if (p2JustCreated) {
         presion2 = { startHole: hole, byHole: {}, accum: 0 };
-        presion2.accum += holeResult;
-        presion2.byHole[hole] = { result: holeResult, accum: presion2.accum };
       } else if (presion2) {
         presion2.accum += holeResult;
         presion2.byHole[hole] = { result: holeResult, accum: presion2.accum };
@@ -378,7 +379,7 @@ export function calcDineros(
 ): DinerosRow[] {
   const rows: Record<string, DinerosRow> = {};
   playerIds.forEach(id => {
-    rows[id] = { player_id: id, marcas: 0, marcas_esp: 0, individuales: 0, individuales_medal: 0, parejas: 0, parejas_medal: 0, parejas_base: 0, presiones: 0, total: 0 };
+    rows[id] = { player_id: id, marcas: 0, marcas_esp: 0, individuales: 0, individuales_medal: 0, parejas: 0, parejas_medal: 0, parejas_base: 0, parejas_base_medal: 0, presiones: 0, total: 0 };
   });
 
   // Marcas (plumas por hoyo neto)
@@ -454,22 +455,32 @@ export function calcDineros(
     });
   }
 
-  // Pareja Base — match + medal, 3 vueltas
+  // Pareja Base match — 3 vueltas
   if (gameConfigs.parejas_base?.active && basePair) {
     const bet = gameConfigs.parejas_base.bet_amount;
     parejaBaseResults.forEach(m => {
       for (const v of [m.primera, m.segunda, m.total]) {
-        const matchEarned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
-        const medalEarned = v.medalA < v.medalB ? bet : v.medalA > v.medalB ? -bet : 0;
-        const earned = matchEarned + medalEarned;
+        const earned = v.matchAccum > 0 ? bet : v.matchAccum < 0 ? -bet : 0;
         [m.playerA1, m.playerA2].forEach(id => { if (rows[id]) rows[id].parejas_base += earned; });
         [m.playerB1, m.playerB2].forEach(id => { if (rows[id]) rows[id].parejas_base -= earned; });
       }
     });
   }
 
+  // Pareja Base medal — 3 vueltas
+  if (gameConfigs.parejas_base_medal?.active && basePair) {
+    const bet = gameConfigs.parejas_base_medal.bet_amount;
+    parejaBaseResults.forEach(m => {
+      for (const v of [m.primera, m.segunda, m.total]) {
+        const earned = v.medalA < v.medalB ? bet : v.medalA > v.medalB ? -bet : 0;
+        [m.playerA1, m.playerA2].forEach(id => { if (rows[id]) rows[id].parejas_base_medal += earned; });
+        [m.playerB1, m.playerB2].forEach(id => { if (rows[id]) rows[id].parejas_base_medal -= earned; });
+      }
+    });
+  }
+
   Object.values(rows).forEach(r => {
-    r.total = r.marcas + r.marcas_esp + r.individuales + r.individuales_medal + r.parejas + r.parejas_medal + r.parejas_base + r.presiones;
+    r.total = r.marcas + r.marcas_esp + r.individuales + r.individuales_medal + r.parejas + r.parejas_medal + r.parejas_base + r.parejas_base_medal + r.presiones;
   });
 
   return Object.values(rows);
