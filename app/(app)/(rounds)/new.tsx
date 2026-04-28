@@ -100,23 +100,54 @@ export default function NewRound() {
     },
   });
 
-  // Pre-fill bet amounts from last round
+  // Pre-select default course from user preferences
   useQuery({
-    queryKey: ['last_round_bets'],
+    queryKey: ['user_preferences'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data } = await supabase.from('user_preferences').select('default_course_id').eq('user_id', user.id).maybeSingle();
+      if (data?.default_course_id) setCourseId(data.default_course_id);
+      return data;
+    },
+  });
+
+  // Pre-fill from user defaults, fallback to last round bets
+  useQuery({
+    queryKey: ['user_game_defaults'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
       const { data } = await supabase
+        .from('user_game_defaults')
+        .select('game_type, active, bet_amount')
+        .eq('user_id', user.id);
+      if (data?.length) {
+        setGames(prev => {
+          const next = { ...prev };
+          data.forEach(c => {
+            if (next[c.game_type as GameKey]) {
+              next[c.game_type as GameKey] = { active: c.active, bet_amount: c.bet_amount };
+            }
+          });
+          return next;
+        });
+        return data;
+      }
+      // Fallback: last round bets
+      const { data: lastRound } = await supabase
         .from('rounds')
-        .select('round_game_config(game_type, bet_amount)')
+        .select('round_game_config(game_type, active, bet_amount)')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
-      const configs = (data as any)?.round_game_config as { game_type: string; bet_amount: number }[] | undefined;
+      const configs = (lastRound as any)?.round_game_config as { game_type: string; active: boolean; bet_amount: number }[] | undefined;
       if (configs?.length) {
         setGames(prev => {
           const next = { ...prev };
           configs.forEach(c => {
             if (next[c.game_type as GameKey]) {
-              next[c.game_type as GameKey] = { ...next[c.game_type as GameKey], bet_amount: c.bet_amount };
+              next[c.game_type as GameKey] = { active: c.active, bet_amount: c.bet_amount };
             }
           });
           return next;

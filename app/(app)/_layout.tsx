@@ -13,6 +13,7 @@ export default function AppLayout() {
   const segments = useSegments();
   const isRounds = (segments as string[]).includes('(rounds)');
   const isPlayers = (segments as string[]).includes('(players)');
+  const isSettings = (segments as string[]).includes('(settings)');
 
   // On web: replace the default tab bar with a null render, but capture the nav ref
   const webTabBar = useCallback((props: any) => {
@@ -41,6 +42,12 @@ export default function AppLayout() {
             >
               <Text style={{ color: Colors.white, fontWeight: '700' }}>Jugadores</Text>
             </Pressable>
+            <Pressable
+              onPress={() => tabNavRef.current?.navigate('(settings)')}
+              style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: isSettings ? Colors.greenLight : 'transparent' }}
+            >
+              <Text style={{ color: Colors.white, fontWeight: '700' }}>⚙️ Config</Text>
+            </Pressable>
           </View>
         </View>
       )}
@@ -68,6 +75,13 @@ export default function AppLayout() {
           options={{
             title: 'Jugadores',
             tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="(settings)"
+          options={{
+            title: 'Config',
+            tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
           }}
         />
       </Tabs>
