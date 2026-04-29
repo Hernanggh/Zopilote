@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Stack, useRouter, Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -57,9 +57,33 @@ export default function RoundsHome() {
     refetch();
   }
 
+  const { width } = useWindowDimensions();
+  const showMobileHeader = width < 640;
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <Stack.Screen options={{ headerShown: false }} />
+
+      {showMobileHeader && (
+        <View style={{
+          backgroundColor: Colors.greenDark,
+          paddingTop: 12, paddingBottom: 14,
+          paddingHorizontal: 24,
+          alignItems: 'center',
+          borderBottomWidth: 2, borderBottomColor: Colors.gold,
+          gap: 2,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+            <Text style={{ color: Colors.gold, fontSize: 15 }}>⚑</Text>
+            <Text style={{ color: Colors.white, fontSize: 22, letterSpacing: 4, fontFamily: Fonts.serif }}>
+              GOLFJUEGOS
+            </Text>
+          </View>
+          <Text style={{ color: Colors.gold + 'AA', fontSize: 11, fontFamily: Fonts.fraunces, fontStyle: 'italic', letterSpacing: 0.5 }}>
+            — established 2026 —
+          </Text>
+        </View>
+      )}
 
       {isLoading ? (
         <ActivityIndicator style={{ flex: 1 }} color={Colors.green} />

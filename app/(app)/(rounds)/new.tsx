@@ -295,7 +295,7 @@ export default function NewRound() {
                 onChangeText={v => updateHandicap(p.player_id, v)}
                 keyboardType="number-pad"
                 inputMode="numeric"
-                style={{ fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 4, width: 40, textAlign: 'center' }}
+                style={{ fontFamily: Fonts.mono, fontSize: 16, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 4, width: 40, textAlign: 'center' }}
               />
               <Pressable onPress={() => removePlayer(p.player_id)} style={{ padding: 4 }}>
                 <Text style={{ fontFamily: Fonts.mono, fontSize: 16, color: Colors.textSecondary + '88' }}>×</Text>
@@ -341,7 +341,7 @@ export default function NewRound() {
                       onChangeText={v => updateBet(key, v)}
                       keyboardType="number-pad"
                       inputMode="numeric"
-                      style={{ fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 4, width: 64, textAlign: 'right' }}
+                      style={{ fontFamily: Fonts.mono, fontSize: 16, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 4, width: 64, textAlign: 'right' }}
                     />
                   </View>
                 )}

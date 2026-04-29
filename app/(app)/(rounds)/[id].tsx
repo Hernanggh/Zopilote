@@ -256,7 +256,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
   const FIXED_BG = Colors.creamDeep;
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }} contentInsetAdjustmentBehavior="automatic">
+    <ScrollView style={{ flex: 1, overscrollBehaviorX: 'contain' } as any} contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }} contentInsetAdjustmentBehavior="automatic">
       {readonly && (
         <View style={{ backgroundColor: Colors.gold + '22', padding: 10, borderBottomWidth: 1, borderColor: Colors.gold + '55' }}>
           <Text style={{ color: Colors.goldText, fontWeight: '600', fontSize: 12, textAlign: 'center', fontFamily: Fonts.mono, letterSpacing: 0.5 }}>
@@ -271,26 +271,26 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
       )}
 
       {/* Card wrapper */}
-      <View style={{ margin: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignSelf: 'flex-start' }}>
+      <View style={{ margin: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, maxWidth: screenWidth - 24 }}>
         {/* Card header */}
         <View style={{ backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10, borderTopLeftRadius: 8, borderTopRightRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={{ color: Colors.white, fontSize: 11, fontFamily: Fonts.mono, letterSpacing: 2 }}>SCORECARD</Text>
           <Text style={{ color: Colors.gold, fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 1.5 }}>MARCAS</Text>
         </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View>
+      <View style={{ overflowX: 'auto' } as any}>
+        <View style={{ minWidth: 'max-content' } as any}>
           {/* Header row */}
           <View style={{ flexDirection: 'row', backgroundColor: Colors.greenMid, paddingVertical: 8, alignItems: 'center' }}>
             {/* Fixed cols */}
-            <View style={{ width: HOLE_COL_W, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
-              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Hoyo</Text>
+            <View style={{ width: V_COL_W, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
+              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Ventaja</Text>
             </View>
             <View style={{ width: 36, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
               <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Par</Text>
             </View>
-            <View style={{ width: V_COL_W, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
-              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Ventaja</Text>
+            <View style={{ width: HOLE_COL_W, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
+              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Hoyo</Text>
             </View>
             {players.map(p => (
               <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', gap: 1 }}>
@@ -303,9 +303,9 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
               </View>
             ))}
             {/* Gold divider */}
-            <View style={{ width: MARCA_LABEL_W, borderLeftWidth: 2, borderLeftColor: Colors.gold, alignSelf: 'stretch' }} />
+            <View style={{ width: MARCA_LABEL_W, borderLeftWidth: 2, borderLeftColor: Colors.gold, alignSelf: 'stretch', backgroundColor: Colors.greenMid }} />
             {players.map(p => (
-              <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
+              <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center', backgroundColor: Colors.greenMid }}>
                 <Text style={{ color: Colors.gold, fontWeight: '600', fontSize: 12, fontFamily: Fonts.serif, textAlign: 'center' }} numberOfLines={1}>
                   {playerLabel(p)}
                 </Text>
@@ -322,29 +322,26 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
               <View key={holeNum}>
                 <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
                   {/* Fixed cols */}
-                  <View style={{ width: HOLE_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
-                    <Text style={{ fontFamily: Fonts.serif, fontWeight: '700', fontSize: 14, color: Colors.text }}>{holeNum}</Text>
+                  <View style={{ width: V_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: Colors.textSecondary }}>{hole?.handicap_rank ?? ''}</Text>
                   </View>
                   <View style={{ width: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
                     <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: Colors.textSecondary }}>{hole?.par ?? ''}</Text>
                   </View>
-                  <View style={{ width: V_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
-                    <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: Colors.textSecondary }}>{hole?.handicap_rank ?? ''}</Text>
+                  <View style={{ width: HOLE_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontWeight: '700', fontSize: 14, color: Colors.text }}>{holeNum}</Text>
                   </View>
                   {/* Score inputs */}
                   {players.map(p => {
                     const ventaja = hole && hole.handicap_rank <= (relHcpMap[p.player_id] ?? 0);
                     const rawVal = getValue(p.player_id, holeNum);
                     const gross = parseInt(rawVal, 10);
-                    const hasSaved = !isNaN(gross) && gross > 0 && !localScores[p.player_id]?.[holeNum];
-                    const sym = hasSaved && hole ? scoreSymbol(gross, hole.par) : null;
+                    const sym = !isNaN(gross) && gross > 0 && hole ? scoreSymbol(gross, hole.par) : null;
                     const isUnsaved = !!localScores[p.player_id]?.[holeNum];
-                    const isOverPar = hasSaved && hole && gross > hole.par;
-                    const cellBg = ventaja ? 'rgba(255, 220, 0, 0.28)' : Colors.card;
-                    const scoreColor = readonly ? Colors.textSecondary : isOverPar ? Colors.error : Colors.text;
+                    const scoreColor = readonly ? Colors.textSecondary : Colors.text;
                     return (
-                      <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: cellBg, borderTopWidth: 1, borderTopColor: Colors.border + '55', paddingVertical: 4 }}>
-                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                      <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '55', paddingVertical: 4 }}>
+                        <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: ventaja ? 'rgba(255, 235, 0, 0.45)' : 'transparent', borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1 }}>
                           <TextInput
                             ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
                             value={rawVal}
@@ -365,7 +362,8 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                               color: scoreColor,
                               borderWidth: isUnsaved ? 1 : 0,
                               borderColor: Colors.gold,
-                            }}
+                              outlineWidth: 0,
+                            } as any}
                           />
                           {sym && (
                             <View pointerEvents="none" style={{
@@ -405,13 +403,14 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                             backgroundColor: hasMarca ? Colors.gold + '33' : 'transparent',
                             borderRadius: 4,
                             textAlign: 'center',
-                            fontSize: 15,
+                            fontSize: 16,
                             fontFamily: Fonts.serif,
                             fontWeight: '700',
                             color: Colors.goldText,
                             borderWidth: localMarcas[p.player_id]?.[holeNum] ? 1 : 0,
                             borderColor: Colors.gold,
-                          }}
+                            outlineWidth: 0,
+                          } as any}
                         />
                       </View>
                     );
@@ -434,11 +433,11 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                               </View>
                             );
                           })}
-                          <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 2, borderLeftColor: Colors.gold }} />
+                          <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 2, borderLeftColor: Colors.gold, backgroundColor: Colors.greenMid }} />
                           {players.map(p => {
                             const count = secondHalf.reduce((s, h) => s + (parseInt(marcasEspMap[p.player_id]?.[h] ?? '', 10) || 0), 0);
                             return (
-                              <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
+                              <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center', backgroundColor: Colors.greenMid }}>
                                 <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 15, fontFamily: Fonts.serif }}>{count > 0 ? String(count) : '—'}</Text>
                               </View>
                             );
@@ -461,12 +460,12 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                           </View>
                         );
                       })}
-                      <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 2, borderLeftColor: Colors.gold }} />
+                      <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 2, borderLeftColor: Colors.gold, backgroundColor: isNinth ? Colors.greenMid : Colors.greenDark }} />
                       {players.map(p => {
                         const halfHoles = isNinth ? holeOrder.slice(0, idx + 1) : holeOrder;
                         const count = halfHoles.reduce((s, h) => s + (parseInt(marcasEspMap[p.player_id]?.[h] ?? '', 10) || 0), 0);
                         return (
-                          <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
+                          <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center', backgroundColor: isNinth ? Colors.greenMid : Colors.greenDark }}>
                             <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 15, fontFamily: Fonts.serif }}>{count > 0 ? String(count) : '—'}</Text>
                           </View>
                         );
@@ -478,7 +477,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
             );
           })}
         </View>
-      </ScrollView>
+      </View>
       </View>
     </ScrollView>
   );
@@ -506,7 +505,14 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
 
   const playerIds = players.map(p => p.player_id);
   const nameMap: Record<string, string> = {};
-  players.forEach(p => { nameMap[p.player_id] = p.players.name; });
+  const labelMap: Record<string, string> = {};
+  const displayMap: Record<string, string> = {};
+  players.forEach(p => {
+    nameMap[p.player_id] = p.players.name;
+    const initials = p.players.name.trim().split(/\s+/).map((w: string) => w[0].toUpperCase()).join('');
+    labelMap[p.player_id] = p.players.suffix ? `${initials} ${p.players.suffix}` : initials;
+    displayMap[p.player_id] = p.players.suffix ? `${p.players.name} ${p.players.suffix}` : p.players.name;
+  });
 
   const marcas = gameConfigs.marcas?.active
     ? calcMarcas(netMap, playerIds, holeOrder)
@@ -529,7 +535,8 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
     : [];
 
   const COL_W = 54;
-  const ROW_H_W = 74;
+  const ROW_H_W = 56;
+  const IND_ROW_H_W = 72;
 
   const SECTIONS = [
     { key: 'primera' as const, label: '1ª Vuelta', bg: '#FFF5F5' },
@@ -581,11 +588,11 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
   const pairIds = [...new Set(parejasResults.flatMap(m => [m.pairA, m.pairB]))].sort((a, b) => a - b);
   const pairName = (num: number, extra?: Pairing[]) => {
     if (num === 0 && basePairData) {
-      return `${nameMap[basePairData.player1_id]?.split(' ')[0]}\n${nameMap[basePairData.player2_id]?.split(' ')[0]}`;
+      return `${labelMap[basePairData.player1_id] ?? '?'}\n${labelMap[basePairData.player2_id] ?? '?'}`;
     }
     const pair = [...pairings, ...(extra ?? [])].find(p => p.pair_number === num);
     if (!pair) return `P${num}`;
-    return `${nameMap[pair.player1_id]?.split(' ')[0]}\n${nameMap[pair.player2_id]?.split(' ')[0]}`;
+    return `${labelMap[pair.player1_id] ?? '?'}\n${labelMap[pair.player2_id] ?? '?'}`;
   };
 
   const CELL_BORDER = { borderLeftWidth: 1, borderColor: Colors.border + '44' } as const;
@@ -609,7 +616,7 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
               const marcasEspTotal = Object.values(marcasEspMap[id] ?? {}).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
               return (
                 <View key={id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
-                  <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }}>{nameMap[id]}</Text>
+                  <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }}>{displayMap[id]}</Text>
                   <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: Colors.text, fontVariant: ['tabular-nums'] }}>
                     {marcas.totals[id] ?? 0}
                   </Text>
@@ -627,15 +634,15 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {individualResults.length > 0 && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Individuales</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ overflowX: 'auto' } as any}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               {/* Column headers */}
               <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
-                <View style={{ width: ROW_H_W, padding: 8 }} />
+                <View style={{ width: IND_ROW_H_W, padding: 8 }} />
                 {playerIds.map(id => (
                   <View key={id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
                     <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
-                      {nameMap[id]?.split(' ')[0]}
+                      {labelMap[id]}
                     </Text>
                   </View>
                 ))}
@@ -648,9 +655,9 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                   </View>
                   {playerIds.map((rowId, ri) => (
                     <View key={rowId} style={{ flexDirection: 'row', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '44' }}>
-                      <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
+                      <View style={{ width: IND_ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
                         <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.text }} numberOfLines={1}>
-                          {nameMap[rowId]?.split(' ')[0]}
+                          {labelMap[rowId]}
                         </Text>
                       </View>
                       {playerIds.map(colId => {
@@ -685,7 +692,7 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                 </View>
               ))}
             </View>
-          </ScrollView>
+          </View>
         </View>
       )}
 
@@ -693,13 +700,13 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {parejasResults.length > 0 && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Parejas</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ overflowX: 'auto' } as any}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
                 <View style={{ width: ROW_H_W, padding: 8 }} />
                 {pairIds.map(pid => (
-                  <View key={pid} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
-                    <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                  <View key={pid} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 4, ...CELL_BORDER }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 10, color: Colors.white, textAlign: 'center', lineHeight: 14 }}>
                       {pairName(pid)}
                     </Text>
                   </View>
@@ -713,8 +720,8 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                   </View>
                   {pairIds.map((rowPair, ri) => (
                     <View key={rowPair} style={{ flexDirection: 'row', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '44' }}>
-                      <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
-                        <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.text }} numberOfLines={1}>
+                      <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
+                        <Text style={{ fontFamily: Fonts.serif, fontSize: 10, color: Colors.text, textAlign: 'center', lineHeight: 14 }}>
                           {pairName(rowPair)}
                         </Text>
                       </View>
@@ -745,7 +752,7 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                 </View>
               ))}
             </View>
-          </ScrollView>
+          </View>
         </View>
       )}
 
@@ -753,12 +760,12 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {parejaBaseResults.length > 0 && basePairData && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Pareja Base</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ overflowX: 'auto' } as any}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
                 <View style={{ width: ROW_H_W, padding: 8, justifyContent: 'center' }}>
                   <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.gold, textAlign: 'center' }} numberOfLines={2}>
-                    {nameMap[basePairData!.player1_id]?.split(' ')[0]}{'\n'}{nameMap[basePairData!.player2_id]?.split(' ')[0]}
+                    {labelMap[basePairData!.player1_id] ?? '?'}{'\n'}{labelMap[basePairData!.player2_id] ?? '?'}
                   </Text>
                 </View>
                 {parejaBaseResults.map(m => (
@@ -794,7 +801,7 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                 </View>
               ))}
             </View>
-          </ScrollView>
+          </View>
         </View>
       )}
 
@@ -831,7 +838,11 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
 
   const playerIds = players.map(p => p.player_id);
   const nameMap: Record<string, string> = {};
-  players.forEach(p => { nameMap[p.player_id] = p.players.name; });
+  const displayMap: Record<string, string> = {};
+  players.forEach(p => {
+    nameMap[p.player_id] = p.players.name;
+    displayMap[p.player_id] = p.players.suffix ? `${p.players.name} ${p.players.suffix}` : p.players.name;
+  });
 
   const marcas = calcMarcas(netMap, playerIds, holeOrder);
   const playerHandicaps = players.map(p => ({ id: p.player_id, handicap: p.handicap }));
@@ -876,37 +887,44 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
     return fields.reduce((s, f) => s + ((row as any)[f] ?? 0), 0);
   }
 
+  const NAME_W = 90;
+  const COL_W = 72;
+
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
-      <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10 }}>
-          <Text style={{ flex: 1, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
-          {colGroups.map(g => (
-            <Text key={g.key} style={{ width: 72, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>{g.label.toUpperCase()}</Text>
-          ))}
-          <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>TOTAL</Text>
-        </View>
+      <View style={{ borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+        <View style={{ overflowX: 'auto' } as any}>
+          <View style={{ minWidth: 'max-content' } as any}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10 }}>
+              <Text style={{ width: NAME_W, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
+              {colGroups.map(g => (
+                <Text key={g.key} style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>{g.label.toUpperCase()}</Text>
+              ))}
+              <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>TOTAL</Text>
+            </View>
 
-        {/* Rows */}
-        {dineros.sort((a, b) => b.total - a.total).map((row, i) => (
-          <View key={row.player_id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
-            <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }} numberOfLines={1}>
-              {nameMap[row.player_id]}
-            </Text>
-            {colGroups.map(g => {
-              const val = groupVal(row, g.fields);
-              return (
-                <Text key={g.key} style={{ width: 72, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 13, fontWeight: '700', color: color(val), fontVariant: ['tabular-nums'] }}>
-                  {val !== 0 ? fmt(val) : '—'}
+            {/* Rows */}
+            {dineros.sort((a, b) => b.total - a.total).map((row, i) => (
+              <View key={row.player_id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
+                <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }} numberOfLines={1}>
+                  {displayMap[row.player_id]}
                 </Text>
-              );
-            })}
-            <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: color(row.total), fontVariant: ['tabular-nums'] }}>
-              {fmt(row.total)}
-            </Text>
+                {colGroups.map(g => {
+                  const val = groupVal(row, g.fields);
+                  return (
+                    <Text key={g.key} style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 13, fontWeight: '700', color: color(val), fontVariant: ['tabular-nums'] }}>
+                      {val !== 0 ? fmt(val) : '—'}
+                    </Text>
+                  );
+                })}
+                <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: color(row.total), fontVariant: ['tabular-nums'] }}>
+                  {fmt(row.total)}
+                </Text>
+              </View>
+            ))}
           </View>
-        ))}
+        </View>
       </View>
 
       {/* Comprobación */}
@@ -1088,61 +1106,54 @@ export default function RoundScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Tab bar */}
-      <View style={{ flexDirection: 'row', backgroundColor: Colors.background, borderBottomWidth: 1, borderColor: Colors.border, alignItems: 'center' }}>
-        {TABS.map(tab => (
-          <Pressable
-            key={tab}
-            onPress={() => setActiveTab(tab)}
-            style={{ paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === tab ? Colors.gold : 'transparent' }}
-          >
-            <Text style={{
-              fontSize: 11, letterSpacing: 1.5,
-              fontFamily: Fonts.mono,
-              fontWeight: activeTab === tab ? '700' : '400',
-              color: activeTab === tab ? Colors.text : Colors.textSecondary,
-            }}>
-              {tab.toUpperCase()}
-            </Text>
-          </Pressable>
-        ))}
-        <View style={{ flex: 1 }} />
-        {isActive ? (
-          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10, alignItems: 'center' }}>
-            <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
-            </Pressable>
+      <View style={{ backgroundColor: Colors.background, borderBottomWidth: 1, borderColor: Colors.border }}>
+        {/* Tabs row */}
+        <View style={{ flexDirection: 'row' }}>
+          {TABS.map(tab => (
             <Pressable
-              onPress={() => setConfirmModal('pause')}
-              style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
+              key={tab}
+              onPress={() => setActiveTab(tab)}
+              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === tab ? Colors.gold : 'transparent' }}
             >
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>PAUSAR</Text>
+              <Text style={{
+                fontSize: 10, letterSpacing: 1,
+                fontFamily: Fonts.mono,
+                fontWeight: activeTab === tab ? '700' : '400',
+                color: activeTab === tab ? Colors.text : Colors.textSecondary,
+              }}>
+                {tab.toUpperCase()}
+              </Text>
             </Pressable>
-            <Pressable
-              onPress={() => setConfirmModal('finish')}
-              style={{ borderWidth: 1, borderColor: Colors.error + '88', borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.error, fontFamily: Fonts.mono }}>TERMINAR</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10, alignItems: 'center' }}>
-            <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.replace('/')}
-              style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>REGRESAR</Text>
-            </Pressable>
-            <Pressable
-              onPress={doEdit}
-              style={{ borderWidth: 1, borderColor: Colors.gold, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>EDITAR</Text>
-            </Pressable>
-          </View>
-        )}
+          ))}
+        </View>
+        {/* Actions row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderTopWidth: 1, borderTopColor: Colors.border + '55' }}>
+          {isActive ? (
+            <>
+              <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
+              </Pressable>
+              <Pressable onPress={() => setConfirmModal('pause')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>PAUSAR</Text>
+              </Pressable>
+              <Pressable onPress={() => setConfirmModal('finish')} style={{ borderWidth: 1, borderColor: Colors.error + '88', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.error, fontFamily: Fonts.mono }}>TERMINAR</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
+              </Pressable>
+              <Pressable onPress={() => router.replace('/')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>REGRESAR</Text>
+              </Pressable>
+              <Pressable onPress={doEdit} style={{ borderWidth: 1, borderColor: Colors.gold, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>EDITAR</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
       </View>
 
       {/* Content */}

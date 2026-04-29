@@ -166,7 +166,7 @@ export default function PlayersScreen() {
         {/* Page header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 1, borderColor: Colors.border }}>
           <View style={{ gap: 4 }}>
-            <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Roster del Club</Text>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Roster del Foursome</Text>
             <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
               {players.length} {players.length === 1 ? 'jugador registrado' : 'jugadores registrados'}
             </Text>

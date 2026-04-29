@@ -1,11 +1,15 @@
 import { useRef, useCallback } from 'react';
 import { Tabs, useSegments } from 'expo-router';
-import { View, Text, Pressable, Platform } from 'react-native';
+import { View, Text, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Fonts } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function AppLayout() {
   const isWeb = Platform.OS === 'web';
+  const { width } = useWindowDimensions();
+  const showWebNav = isWeb && width >= 640;
+  const insets = useSafeAreaInsets();
   const tabNavRef = useRef<any>(null);
   const segments = useSegments();
   const isRounds = (segments as string[]).includes('(rounds)');
@@ -19,7 +23,7 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      {isWeb && (
+      {showWebNav && (
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
           backgroundColor: Colors.greenDark,
@@ -34,7 +38,7 @@ export default function AppLayout() {
               GOLFJUEGOS
             </Text>
             <Text style={{ color: Colors.gold + 'AA', fontSize: 11, fontFamily: Fonts.fraunces, fontStyle: 'italic', letterSpacing: 0.5 }}>
-              — established 2024 —
+              — established 2026 —
             </Text>
           </View>
 
@@ -74,14 +78,14 @@ export default function AppLayout() {
         </View>
       )}
       <Tabs
-        tabBar={isWeb ? webTabBar : undefined}
+        tabBar={showWebNav ? webTabBar : undefined}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: Colors.gold,
           tabBarInactiveTintColor: Colors.textSecondary,
-          tabBarStyle: isWeb
+          tabBarStyle: showWebNav
             ? { display: 'none' }
-            : { backgroundColor: Colors.greenDark, borderTopColor: Colors.gold + '55' },
+            : { backgroundColor: Colors.greenDark, borderTopColor: Colors.gold + '55', paddingBottom: insets.bottom || 8, height: 56 + (insets.bottom || 8) },
           tabBarLabelStyle: { fontFamily: Fonts.serif, fontSize: 12 },
         }}
       >
