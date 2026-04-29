@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Switch
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/colors';
+import { Colors, Fonts } from '@/constants/colors';
 
 type HoleData = { hole_number: number; par: number; handicap_rank: number };
 
@@ -14,6 +14,7 @@ export default function CampoEdit() {
   const [name, setName] = useState('');
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [err, setErr] = useState('');
 
   const { data: course, isLoading } = useQuery({
@@ -30,7 +31,7 @@ export default function CampoEdit() {
     enabled: !!id,
   });
 
-  const { data: myPrefs, refetch: refetchPrefs } = useQuery<{ default_course_id: string | null } | null>({
+  const { data: myPrefs } = useQuery<{ default_course_id: string | null } | null>({
     queryKey: ['user_preferences'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -80,7 +81,8 @@ export default function CampoEdit() {
       qc.invalidateQueries({ queryKey: ['course', id] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['holes', id] });
-      router.back();
+      setSaved(true);
+      setTimeout(() => { setSaved(false); router.back(); }, 600);
     }
   }
 
@@ -97,64 +99,105 @@ export default function CampoEdit() {
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
-        <ActivityIndicator color={Colors.green} />
+        <ActivityIndicator color={Colors.greenDark} />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 40 }}>
-      <Stack.Screen options={{
-        title: name || 'Campo',
-        headerRight: () => (
-          <Pressable onPress={save} disabled={saving} style={{ paddingHorizontal: 4 }}>
-            {saving
-              ? <ActivityIndicator size="small" color={Colors.green} />
-              : <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.green }}>Guardar</Text>
-            }
-          </Pressable>
-        ),
-      }} />
+    <ScrollView
+      style={{ flex: 1, backgroundColor: Colors.background }}
+      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
+    >
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Page header */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 }}>
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>{name || 'Campo'}</Text>
+          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
+            Par y ventaja por hoyo
+          </Text>
+        </View>
+        <Pressable
+          onPress={save}
+          disabled={saving}
+          style={{ borderWidth: 1, borderColor: saved ? Colors.success : Colors.gold, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 8, marginTop: 6 }}
+        >
+          {saving
+            ? <ActivityIndicator size="small" color={Colors.gold} />
+            : <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: saved ? Colors.success : Colors.goldText }}>
+                {saved ? 'GUARDADO' : 'GUARDAR'}
+              </Text>
+          }
+        </Pressable>
+      </View>
 
       {!!err && (
-        <View style={{ backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
-          <Text style={{ color: Colors.error, fontWeight: '600' }}>⚠️ {err}</Text>
+        <View style={{ backgroundColor: Colors.error + '15', borderRadius: 4, padding: 12, borderLeftWidth: 3, borderLeftColor: Colors.error }}>
+          <Text style={{ fontFamily: Fonts.mono, fontSize: 12, color: Colors.error }}>{err}</Text>
         </View>
       )}
 
       {/* Nombre */}
-      <View style={{ gap: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>NOMBRE DEL CAMPO</Text>
-        <View style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border }}>
+      <View style={{ gap: 6 }}>
+        <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary, paddingHorizontal: 4 }}>NOMBRE DEL CAMPO</Text>
+        <View style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 16, paddingVertical: 12 }}>
           <TextInput
             value={name}
             onChangeText={setName}
             placeholder="Nombre del campo"
-            style={{ fontSize: 16, color: Colors.text }}
+            placeholderTextColor={Colors.textSecondary + '88'}
+            style={{ fontFamily: Fonts.serif, fontSize: 18, color: Colors.text }}
           />
         </View>
       </View>
 
+      {/* Campo default */}
+      <View style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 14, gap: 12 }}>
+          <Switch
+            value={myPrefs?.default_course_id === id}
+            onValueChange={toggleMyDefault}
+            trackColor={{ false: Colors.border, true: Colors.greenDark }}
+            thumbColor={myPrefs?.default_course_id === id ? Colors.gold : Colors.white}
+          />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }}>Campo por defecto</Text>
+            <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 12, color: Colors.textSecondary }}>
+              Se pre-selecciona al crear una nueva partida
+            </Text>
+          </View>
+        </View>
+      </View>
+
       {/* Hoyos */}
-      <View style={{ gap: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>HOYOS</Text>
-        <View style={{ backgroundColor: Colors.card, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+      <View style={{ gap: 6 }}>
+        <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary, paddingHorizontal: 4 }}>HOYOS</Text>
+        <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+          {/* Header */}
           <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingVertical: 10, paddingHorizontal: 12 }}>
-            <Text style={{ width: 52, fontSize: 12, fontWeight: '700', color: Colors.white, textAlign: 'center' }}>Hoyo</Text>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: Colors.greenLight, textAlign: 'center' }}>Par</Text>
-            <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: Colors.gold, textAlign: 'center' }}>Ventaja</Text>
+            <Text style={{ width: 52, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB', textAlign: 'center' }}>HOYO</Text>
+            <Text style={{ flex: 1, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB', textAlign: 'center' }}>PAR</Text>
+            <Text style={{ flex: 1, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold, textAlign: 'center' }}>VENTAJA</Text>
           </View>
           {holes.map((hole, i) => (
-            <View key={hole.hole_number} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, backgroundColor: i % 2 === 0 ? Colors.card : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '44' }}>
-              <View style={{ width: 52, alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.text }}>{hole.hole_number}</Text>
+            <View key={hole.hole_number} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: Colors.border + '55' }}>
+              <View style={{ width: 52, alignItems: 'center', backgroundColor: Colors.creamDeep, paddingVertical: 6, borderRadius: 3 }}>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 13, fontWeight: '700', color: Colors.text }}>{hole.hole_number}</Text>
               </View>
               <View style={{ flex: 1, alignItems: 'center' }}>
                 <TextInput
                   value={String(hole.par)}
                   onChangeText={v => updateHole(hole.hole_number, 'par', v)}
                   keyboardType="number-pad"
-                  style={{ width: 50, textAlign: 'center', fontSize: 15, fontWeight: '600', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.border }}
+                  style={{
+                    width: 50, textAlign: 'center',
+                    fontFamily: Fonts.mono, fontSize: 15, fontWeight: '600',
+                    color: Colors.text,
+                    borderBottomWidth: 1, borderColor: Colors.border,
+                    paddingVertical: 4,
+                  }}
                 />
               </View>
               <View style={{ flex: 1, alignItems: 'center' }}>
@@ -162,24 +205,17 @@ export default function CampoEdit() {
                   value={String(hole.handicap_rank)}
                   onChangeText={v => updateHole(hole.hole_number, 'handicap_rank', v)}
                   keyboardType="number-pad"
-                  style={{ width: 50, textAlign: 'center', fontSize: 15, fontWeight: '600', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.border }}
+                  style={{
+                    width: 50, textAlign: 'center',
+                    fontFamily: Fonts.mono, fontSize: 15, fontWeight: '600',
+                    color: Colors.text,
+                    borderBottomWidth: 1, borderColor: Colors.border,
+                    paddingVertical: 4,
+                  }}
                 />
               </View>
             </View>
           ))}
-        </View>
-      </View>
-
-      {/* Mi campo default */}
-      <View style={{ gap: 8 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>MI CAMPO DEFAULT</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border }}>
-          <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>Usar este campo al crear partidas</Text>
-          <Switch
-            value={myPrefs?.default_course_id === id}
-            onValueChange={toggleMyDefault}
-            trackColor={{ false: Colors.border, true: Colors.green }}
-          />
         </View>
       </View>
     </ScrollView>

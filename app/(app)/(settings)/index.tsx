@@ -1,78 +1,86 @@
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { Colors } from '@/constants/colors';
+import { Colors, Fonts } from '@/constants/colors';
 
-function NavRow({ label, icon, subtitle, onPress }: { label: string; icon: string; subtitle: string; onPress: () => void }) {
+function NavRow({ label, subtitle, onPress, last }: {
+  label: string; subtitle: string; onPress: () => void; last?: boolean;
+}) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: 'row', alignItems: 'center', padding: 16,
-        backgroundColor: pressed ? Colors.background : Colors.card, gap: 14,
-      })}
-    >
-      <Text style={{ fontSize: 22, width: 30, textAlign: 'center' }}>{icon}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: '600', color: Colors.text }}>{label}</Text>
-        <Text style={{ fontSize: 12, color: Colors.textSecondary, marginTop: 2 }}>{subtitle}</Text>
-      </View>
-      <Text style={{ fontSize: 20, color: Colors.textSecondary }}>›</Text>
-    </Pressable>
+    <>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({
+          flexDirection: 'row', alignItems: 'center',
+          paddingHorizontal: 18, paddingVertical: 14,
+          backgroundColor: pressed ? Colors.creamDeep : Colors.card,
+          gap: 12,
+        })}
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{label}</Text>
+          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 12, color: Colors.textSecondary }}>{subtitle}</Text>
+        </View>
+        <Text style={{ fontFamily: Fonts.mono, fontSize: 18, color: Colors.textSecondary + '88' }}>›</Text>
+      </Pressable>
+      {!last && <View style={{ height: 1, backgroundColor: Colors.border, marginLeft: 18 }} />}
+    </>
   );
 }
 
-function Section({ children }: { children: React.ReactNode }) {
+function SectionHeader({ title }: { title: string }) {
   return (
-    <View style={{ backgroundColor: Colors.card, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border, marginHorizontal: 16 }}>
-      {children}
-    </View>
+    <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1.5, color: Colors.textSecondary, paddingHorizontal: 4, paddingTop: 4 }}>
+      {title}
+    </Text>
   );
-}
-
-function Divider() {
-  return <View style={{ height: 1, backgroundColor: Colors.border, marginLeft: 60 }} />;
 }
 
 export default function SettingsIndex() {
   const router = useRouter();
 
   return (
-    <ScrollView contentContainerStyle={{ paddingVertical: 24, gap: 16, paddingBottom: 40 }}>
-      <Stack.Screen options={{ title: 'Configuración' }} />
+    <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 60 }}>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <Section>
+      {/* Page title */}
+      <View style={{ paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 }}>
+        <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Configuración</Text>
+      </View>
+
+      <SectionHeader title="CUENTA" />
+      <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
         <NavRow
-          icon="👤"
           label="Mi cuenta"
           subtitle="Email y cerrar sesión"
           onPress={() => router.push('/(app)/(settings)/cuenta')}
+          last
         />
-      </Section>
+      </View>
 
-      <Section>
+      <SectionHeader title="PARTIDAS" />
+      <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
         <NavRow
-          icon="🎮"
           label="Juegos por defecto"
-          subtitle="Qué juegos y montos vienen pre-seleccionados al crear partida"
+          subtitle="Apuestas pre-seleccionadas al crear partida"
           onPress={() => router.push('/(app)/(settings)/defaults')}
         />
-        <Divider />
         <NavRow
-          icon="⛳"
           label="Campos"
-          subtitle="Par, ventajas por hoyo y campo default por jugador"
+          subtitle="Par, ventajas y campo default"
           onPress={() => router.push('/(app)/(settings)/campos')}
+          last
         />
-      </Section>
+      </View>
 
-      <Section>
+      <SectionHeader title="INFORMACIÓN" />
+      <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
         <NavRow
-          icon="📖"
           label="Reglas de juegos"
           subtitle="Cómo se calculan las apuestas"
           onPress={() => router.push('/(app)/(settings)/reglas')}
+          last
         />
-      </Section>
+      </View>
     </ScrollView>
   );
 }

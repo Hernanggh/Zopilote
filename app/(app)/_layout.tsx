@@ -1,53 +1,75 @@
 import { useRef, useCallback } from 'react';
 import { Tabs, useSegments } from 'expo-router';
 import { View, Text, Pressable, Platform } from 'react-native';
-import { Colors } from '@/constants/colors';
+import { Colors, Fonts } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function AppLayout() {
   const isWeb = Platform.OS === 'web';
-  // Ref to the Tabs navigator's navigation object — set from inside the tabBar callback
-  // so we can call navigation.navigate('(rounds)') / navigation.navigate('(players)')
-  // directly without going through URL routing (which routes /players to [id].tsx)
   const tabNavRef = useRef<any>(null);
   const segments = useSegments();
   const isRounds = (segments as string[]).includes('(rounds)');
   const isPlayers = (segments as string[]).includes('(players)');
   const isSettings = (segments as string[]).includes('(settings)');
 
-  // On web: replace the default tab bar with a null render, but capture the nav ref
   const webTabBar = useCallback((props: any) => {
     tabNavRef.current = props.navigation;
     return null;
   }, []);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
       {isWeb && (
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          backgroundColor: Colors.greenDark, paddingHorizontal: 20, paddingVertical: 14,
+          backgroundColor: Colors.greenDark,
+          paddingHorizontal: 24, paddingVertical: 0,
+          borderBottomWidth: 2, borderBottomColor: Colors.gold,
+          minHeight: 56,
         }}>
-          <Text style={{ color: Colors.white, fontSize: 20, fontWeight: '800' }}>⛳ GolfJuegos</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              onPress={() => tabNavRef.current?.navigate('(rounds)')}
-              style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: isRounds ? Colors.greenLight : 'transparent' }}
-            >
-              <Text style={{ color: Colors.white, fontWeight: '700' }}>Partidas</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => tabNavRef.current?.navigate('(players)')}
-              style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: isPlayers ? Colors.greenLight : 'transparent' }}
-            >
-              <Text style={{ color: Colors.white, fontWeight: '700' }}>Jugadores</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => tabNavRef.current?.navigate('(settings)')}
-              style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: isSettings ? Colors.greenLight : 'transparent' }}
-            >
-              <Text style={{ color: Colors.white, fontWeight: '700' }}>⚙️ Config</Text>
-            </Pressable>
+          {/* Logo */}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+            <Text style={{ color: Colors.gold, fontSize: 13 }}>⚑</Text>
+            <Text style={{ color: Colors.white, fontSize: 17, letterSpacing: 3, fontFamily: Fonts.serif }}>
+              GOLFJUEGOS
+            </Text>
+            <Text style={{ color: Colors.gold + 'AA', fontSize: 11, fontFamily: Fonts.fraunces, fontStyle: 'italic', letterSpacing: 0.5 }}>
+              — established 2024 —
+            </Text>
+          </View>
+
+          {/* Nav links */}
+          <View style={{ flexDirection: 'row', alignItems: 'stretch', height: 56 }}>
+            {([
+              { label: 'PARTIDAS', tab: '(rounds)', active: isRounds },
+              { label: 'JUGADORES', tab: '(players)', active: isPlayers },
+              { label: 'CONFIG', tab: '(settings)', active: isSettings },
+            ] as const).map(({ label, tab, active }) => (
+              <Pressable
+                key={tab}
+                onPress={() => tabNavRef.current?.navigate(tab)}
+                style={{
+                  paddingHorizontal: 18,
+                  justifyContent: 'center', alignItems: 'center',
+                  borderWidth: active ? 1 : 0,
+                  borderColor: Colors.gold,
+                  borderRadius: active ? 4 : 0,
+                  marginVertical: 10,
+                  marginHorizontal: 2,
+                  backgroundColor: active ? 'transparent' : 'transparent',
+                }}
+              >
+                <Text style={{
+                  color: active ? Colors.gold : Colors.white + 'BB',
+                  fontSize: 11,
+                  fontWeight: '700',
+                  letterSpacing: 1.5,
+                  fontFamily: Fonts.mono,
+                }}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </View>
       )}
@@ -55,12 +77,12 @@ export default function AppLayout() {
         tabBar={isWeb ? webTabBar : undefined}
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: Colors.green,
+          tabBarActiveTintColor: Colors.gold,
           tabBarInactiveTintColor: Colors.textSecondary,
           tabBarStyle: isWeb
             ? { display: 'none' }
-            : { backgroundColor: Colors.card, borderTopColor: Colors.border },
-          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+            : { backgroundColor: Colors.greenDark, borderTopColor: Colors.gold + '55' },
+          tabBarLabelStyle: { fontFamily: Fonts.serif, fontSize: 12 },
         }}
       >
         <Tabs.Screen

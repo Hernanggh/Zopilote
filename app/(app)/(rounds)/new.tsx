@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, TextInput, Switch, ActivityIndicator
 import { Stack, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/colors';
+import { Colors, Fonts } from '@/constants/colors';
 
 type Course = { id: string; name: string };
 type Player = { id: string; name: string; default_handicap: number };
@@ -23,7 +23,6 @@ const GAME_LABELS: Record<GameKey, string> = {
   presiones: 'Presiones',
 };
 
-// Game types that are sub-options visually grouped under another game
 const GAME_INDENT: Partial<Record<GameKey, true>> = {
   individuales_medal: true,
   parejas_medal: true,
@@ -32,18 +31,10 @@ const GAME_INDENT: Partial<Record<GameKey, true>> = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <View style={{ marginBottom: 24, gap: 12 }}>
-      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>
+    <View style={{ marginBottom: 24, gap: 10 }}>
+      <Text style={{ fontFamily: Fonts.mono, fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: Colors.textSecondary }}>
         {title.toUpperCase()}
       </Text>
-      {children}
-    </View>
-  );
-}
-
-function Card({ children, style }: { children: React.ReactNode; style?: object }) {
-  return (
-    <View style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border, ...style }}>
       {children}
     </View>
   );
@@ -52,8 +43,8 @@ function Card({ children, style }: { children: React.ReactNode; style?: object }
 function ErrorBanner({ message }: { message: string }) {
   if (!message) return null;
   return (
-    <View style={{ backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: Colors.error }}>
-      <Text style={{ color: Colors.error, fontWeight: '600', fontSize: 14 }}>⚠️ {message}</Text>
+    <View style={{ backgroundColor: Colors.error + '15', borderRadius: 4, padding: 12, marginBottom: 16, borderLeftWidth: 3, borderLeftColor: Colors.error }}>
+      <Text style={{ fontFamily: Fonts.mono, color: Colors.error, fontSize: 12 }}>{message}</Text>
     </View>
   );
 }
@@ -100,7 +91,6 @@ export default function NewRound() {
     },
   });
 
-  // Pre-select default course from user preferences
   useQuery({
     queryKey: ['user_preferences'],
     queryFn: async () => {
@@ -112,7 +102,6 @@ export default function NewRound() {
     },
   });
 
-  // Pre-fill from user defaults, fallback to last round bets
   useQuery({
     queryKey: ['user_game_defaults'],
     queryFn: async () => {
@@ -134,7 +123,6 @@ export default function NewRound() {
         });
         return data;
       }
-      // Fallback: last round bets
       const { data: lastRound } = await supabase
         .from('rounds')
         .select('round_game_config(game_type, active, bet_amount)')
@@ -203,7 +191,6 @@ export default function NewRound() {
 
   async function save() {
     setErrorMsg('');
-
     if (!courseId) { setErrorMsg('Selecciona un campo'); return; }
     if (players.length < 2) { setErrorMsg('Agrega al menos 2 jugadores'); return; }
     if (games.parejas.active && pairings.length < 2) { setErrorMsg('Necesitas al menos 2 parejas para Juego Parejas'); return; }
@@ -259,8 +246,16 @@ export default function NewRound() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <Stack.Screen options={{ title: 'Nueva Partida', headerBackTitle: 'Atrás' }} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} contentInsetAdjustmentBehavior="automatic">
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 20, paddingBottom: 48 }} contentInsetAdjustmentBehavior="automatic">
+
+        {/* Page header */}
+        <View style={{ paddingBottom: 20, marginBottom: 8 }}>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Nueva Partida</Text>
+          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>
+            Configura campo, jugadores y apuestas
+          </Text>
+        </View>
 
         <ErrorBanner message={errorMsg} />
 
@@ -268,10 +263,10 @@ export default function NewRound() {
         <Section title="Campo">
           <Pressable
             onPress={() => setShowCoursePicker(true)}
-            style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: courseId ? Colors.green : Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            style={{ backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: courseId ? Colors.gold : Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
           >
-            <Text style={{ fontSize: 16, color: courseId ? Colors.text : Colors.textSecondary }}>{courseName}</Text>
-            <Text style={{ color: Colors.textSecondary, fontSize: 18 }}>›</Text>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: courseId ? Colors.text : Colors.textSecondary }}>{courseName}</Text>
+            <Text style={{ fontFamily: Fonts.mono, color: Colors.textSecondary, fontSize: 16 }}>›</Text>
           </Pressable>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -279,9 +274,11 @@ export default function NewRound() {
               <Pressable
                 key={h}
                 onPress={() => setStartHole(h)}
-                style={{ flex: 1, backgroundColor: startHole === h ? Colors.green : Colors.card, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: startHole === h ? Colors.green : Colors.border }}
+                style={{ flex: 1, backgroundColor: startHole === h ? Colors.greenDark : Colors.card, borderRadius: 6, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: startHole === h ? Colors.gold : Colors.border }}
               >
-                <Text style={{ color: startHole === h ? Colors.white : Colors.text, fontWeight: '600' }}>Hoyo {h}</Text>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: startHole === h ? Colors.white : Colors.text }}>
+                  HOYO {h}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -289,28 +286,28 @@ export default function NewRound() {
 
         {/* Jugadores */}
         <Section title={`Jugadores (${players.length}/6)`}>
-          {players.map(p => (
-            <Card key={p.player_id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: Colors.text }}>{p.name}</Text>
-              <Text style={{ fontSize: 13, color: Colors.textSecondary }}>HCP</Text>
+          {players.map((p, i) => (
+            <View key={p.player_id} style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Text style={{ fontFamily: Fonts.serif, fontSize: 16, color: Colors.text, flex: 1 }}>{p.name}</Text>
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary }}>HCP</Text>
               <TextInput
                 value={String(p.handicap)}
                 onChangeText={v => updateHandicap(p.player_id, v)}
                 keyboardType="number-pad"
                 inputMode="numeric"
-                style={{ backgroundColor: Colors.background, borderRadius: 8, padding: 8, width: 52, textAlign: 'center', fontSize: 15, fontWeight: '700', color: Colors.text, borderWidth: 1, borderColor: Colors.border }}
+                style={{ fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 4, width: 40, textAlign: 'center' }}
               />
-              <Pressable onPress={() => removePlayer(p.player_id)} style={{ padding: 6 }}>
-                <Text style={{ fontSize: 22, color: Colors.error }}>×</Text>
+              <Pressable onPress={() => removePlayer(p.player_id)} style={{ padding: 4 }}>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 16, color: Colors.textSecondary + '88' }}>×</Text>
               </Pressable>
-            </Card>
+            </View>
           ))}
           {players.length < 6 && (
             <Pressable
               onPress={() => setShowPlayerPicker(true)}
-              style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.green, borderRadius: 12, padding: 14, alignItems: 'center' }}
+              style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.border, borderRadius: 6, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: Colors.green, fontSize: 15, fontWeight: '600' }}>+ Agregar jugador</Text>
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: Colors.textSecondary }}>+ AGREGAR JUGADOR</Text>
             </Pressable>
           )}
         </Section>
@@ -320,24 +317,35 @@ export default function NewRound() {
           {(Object.keys(games) as GameKey[]).map(key => {
             const indented = !!GAME_INDENT[key];
             return (
-              <Card key={key} style={{ gap: 10, marginLeft: indented ? 16 : 0, borderLeftWidth: indented ? 3 : 1, borderLeftColor: indented ? Colors.green + '66' : Colors.border }}>
+              <View key={key} style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 16, paddingVertical: 12, marginLeft: indented ? 16 : 0, borderLeftWidth: indented ? 3 : 1, borderLeftColor: indented ? Colors.gold + '55' : Colors.border, gap: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: indented ? 14 : 15, fontWeight: '600', color: indented ? Colors.textSecondary : Colors.text }}>{GAME_LABELS[key]}</Text>
-                  <Switch value={games[key].active} onValueChange={() => toggleGame(key)} trackColor={{ true: Colors.green }} />
+                  <Text style={{
+                    fontFamily: indented ? Fonts.fraunces : Fonts.serif,
+                    fontStyle: indented ? 'italic' : 'normal',
+                    fontSize: indented ? 14 : 16,
+                    color: indented ? Colors.textSecondary : Colors.text,
+                    flex: 1,
+                  }}>{GAME_LABELS[key]}</Text>
+                  <Switch
+                    value={games[key].active}
+                    onValueChange={() => toggleGame(key)}
+                    trackColor={{ false: Colors.border, true: Colors.greenDark }}
+                    thumbColor={games[key].active ? Colors.gold : Colors.white}
+                  />
                 </View>
                 {games[key].active && key !== 'presiones' && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 13, color: Colors.textSecondary }}>Apuesta $</Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary }}>APUESTA $</Text>
                     <TextInput
                       value={String(games[key].bet_amount)}
                       onChangeText={v => updateBet(key, v)}
                       keyboardType="number-pad"
                       inputMode="numeric"
-                      style={{ backgroundColor: Colors.background, borderRadius: 8, padding: 8, width: 80, fontSize: 15, fontWeight: '700', color: Colors.text, borderWidth: 1, borderColor: Colors.border, textAlign: 'center' }}
+                      style={{ fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 4, width: 64, textAlign: 'right' }}
                     />
                   </View>
                 )}
-              </Card>
+              </View>
             );
           })}
         </Section>
@@ -346,11 +354,11 @@ export default function NewRound() {
         {games.parejas.active && players.length >= 4 && (
           <Section title="Asignación de Parejas">
             {pairings.map((pair, idx) => (
-              <Card key={idx} style={{ gap: 8 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary }}>PAREJA {pair.pair_number}</Text>
+              <View key={idx} style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, padding: 14, gap: 10 }}>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>PAREJA {pair.pair_number}</Text>
                 {(['p1', 'p2'] as const).map((field, fi) => (
-                  <View key={field}>
-                    <Text style={{ fontSize: 11, color: Colors.textSecondary, marginBottom: 4 }}>Jugador {fi + 1}</Text>
+                  <View key={field} style={{ gap: 6 }}>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary + '88' }}>JUGADOR {fi + 1}</Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                       {playerOptions.map(opt => {
                         const isSelected = pair[field] === opt.value;
@@ -361,20 +369,20 @@ export default function NewRound() {
                             key={opt.value}
                             disabled={conflict && !isSelected}
                             onPress={() => updatePairing(idx, field, opt.value)}
-                            style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: isSelected ? Colors.green : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.green : Colors.border, opacity: conflict && !isSelected ? 0.3 : 1 }}
+                            style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: conflict && !isSelected ? 0.3 : 1 }}
                           >
-                            <Text style={{ fontSize: 13, color: isSelected ? Colors.white : Colors.text, fontWeight: isSelected ? '700' : '400' }}>{opt.label}</Text>
+                            <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label}</Text>
                           </Pressable>
                         );
                       })}
                     </View>
                   </View>
                 ))}
-              </Card>
+              </View>
             ))}
             {pairings.length < 3 && (
-              <Pressable onPress={addPairing} style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.green, borderRadius: 12, padding: 12, alignItems: 'center' }}>
-                <Text style={{ color: Colors.green, fontWeight: '600' }}>+ Pareja {pairings.length + 1}</Text>
+              <Pressable onPress={addPairing} style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.border, borderRadius: 6, paddingVertical: 14, alignItems: 'center' }}>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: Colors.textSecondary }}>+ PAREJA {pairings.length + 1}</Text>
               </Pressable>
             )}
           </Section>
@@ -383,10 +391,10 @@ export default function NewRound() {
         {/* Pareja Base */}
         {games.parejas_base.active && players.length >= 2 && (
           <Section title="Pareja Base">
-            <Card style={{ gap: 8 }}>
+            <View style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, padding: 14, gap: 10 }}>
               {(['p1', 'p2'] as const).map((field, fi) => (
-                <View key={field}>
-                  <Text style={{ fontSize: 12, color: Colors.textSecondary, marginBottom: 4 }}>Jugador {fi + 1}</Text>
+                <View key={field} style={{ gap: 6 }}>
+                  <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary + '88' }}>JUGADOR {fi + 1}</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {playerOptions.map(opt => {
                       const isSelected = basePair?.[field] === opt.value;
@@ -396,16 +404,16 @@ export default function NewRound() {
                           key={opt.value}
                           disabled={other === opt.value}
                           onPress={() => setBasePair(prev => ({ ...(prev ?? { p1: '', p2: '' }), [field]: opt.value }))}
-                          style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.greenDark : Colors.border, opacity: other === opt.value ? 0.3 : 1 }}
+                          style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: other === opt.value ? 0.3 : 1 }}
                         >
-                          <Text style={{ fontSize: 13, color: isSelected ? Colors.white : Colors.text, fontWeight: isSelected ? '700' : '400' }}>{opt.label}</Text>
+                          <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label}</Text>
                         </Pressable>
                       );
                     })}
                   </View>
                 </View>
               ))}
-            </Card>
+            </View>
           </Section>
         )}
 
@@ -414,40 +422,39 @@ export default function NewRound() {
         <Pressable
           onPress={save}
           disabled={saving}
-          style={{ backgroundColor: saving ? Colors.textSecondary : Colors.greenDark, borderRadius: 14, padding: 18, alignItems: 'center' }}
+          style={{ backgroundColor: saving ? Colors.textSecondary : Colors.greenDark, borderRadius: 6, borderWidth: 1, borderColor: Colors.gold, padding: 16, alignItems: 'center', marginTop: 8 }}
         >
           {saving
-            ? <ActivityIndicator color={Colors.white} />
-            : <Text style={{ color: Colors.white, fontSize: 18, fontWeight: '800' }}>Iniciar Partida →</Text>
+            ? <ActivityIndicator color={Colors.gold} />
+            : <Text style={{ fontFamily: Fonts.mono, color: Colors.white, fontSize: 12, fontWeight: '700', letterSpacing: 1.5 }}>INICIAR PARTIDA</Text>
           }
         </Pressable>
 
-        <Pressable
-          onPress={() => router.back()}
-          style={{ borderRadius: 14, padding: 16, alignItems: 'center' }}
-        >
-          <Text style={{ color: Colors.textSecondary, fontSize: 16, fontWeight: '600' }}>Cancelar</Text>
+        <Pressable onPress={() => router.back()} style={{ padding: 16, alignItems: 'center' }}>
+          <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary }}>CANCELAR</Text>
         </Pressable>
       </ScrollView>
 
       {/* Course picker */}
       <Modal visible={showCoursePicker} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowCoursePicker(false)}>
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: Colors.border }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.text }}>Seleccionar Campo</Text>
-            <Pressable onPress={() => setShowCoursePicker(false)}><Text style={{ color: Colors.textSecondary, fontSize: 16 }}>Cerrar</Text></Pressable>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Seleccionar Campo</Text>
+            <Pressable onPress={() => setShowCoursePicker(false)}>
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary }}>CERRAR</Text>
+            </Pressable>
           </View>
           <FlatList
             data={courses}
             keyExtractor={c => c.id}
             contentContainerStyle={{ padding: 12, gap: 8 }}
-            ListEmptyComponent={<Text style={{ textAlign: 'center', color: Colors.textSecondary, marginTop: 32 }}>No hay campos. ¿Corriste el SQL de seed?</Text>}
+            ListEmptyComponent={<Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', textAlign: 'center', color: Colors.textSecondary, marginTop: 32 }}>No hay campos registrados</Text>}
             renderItem={({ item }) => (
               <Pressable
                 onPress={() => { setCourseId(item.id); setShowCoursePicker(false); setErrorMsg(''); }}
-                style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: courseId === item.id ? Colors.green : Colors.border }}
+                style={{ backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: courseId === item.id ? Colors.gold : Colors.border }}
               >
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.text }}>{item.name}</Text>
+                <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{item.name}</Text>
               </Pressable>
             )}
           />
@@ -457,22 +464,26 @@ export default function NewRound() {
       {/* Player picker */}
       <Modal visible={showPlayerPicker} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setShowPlayerPicker(false)}>
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: Colors.border }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.text }}>Agregar Jugador</Text>
-            <Pressable onPress={() => setShowPlayerPicker(false)}><Text style={{ color: Colors.textSecondary, fontSize: 16 }}>Cerrar</Text></Pressable>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderColor: Colors.border }}>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Agregar Jugador</Text>
+            <Pressable onPress={() => setShowPlayerPicker(false)}>
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary }}>CERRAR</Text>
+            </Pressable>
           </View>
           <FlatList
             data={availablePlayers}
             keyExtractor={p => p.id}
             contentContainerStyle={{ padding: 12, gap: 8 }}
-            ListEmptyComponent={<Text style={{ textAlign: 'center', color: Colors.textSecondary, marginTop: 32 }}>Todos los jugadores ya están en la partida</Text>}
+            ListEmptyComponent={<Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', textAlign: 'center', color: Colors.textSecondary, marginTop: 32 }}>Todos los jugadores ya están en la partida</Text>}
             renderItem={({ item }) => (
               <Pressable
                 onPress={() => addPlayer(item)}
-                style={{ backgroundColor: Colors.card, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: Colors.border }}
+                style={{ backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.text }}>{item.name}</Text>
-                <Text style={{ fontSize: 13, color: Colors.textSecondary }}>HCP {item.default_handicap}</Text>
+                <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{item.name}</Text>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 11, color: Colors.textSecondary }}>
+                  HCP <Text style={{ fontWeight: '700', color: Colors.gold }}>{item.default_handicap}</Text>
+                </Text>
               </Pressable>
             )}
           />

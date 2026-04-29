@@ -6,14 +6,14 @@ export default function RoundsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.card },
-        headerTintColor: Colors.greenDark,
-        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
+        headerStyle: { backgroundColor: Colors.greenDark },
+        headerTintColor: Colors.gold,
+        headerTitleStyle: { fontWeight: '700', fontSize: 17, color: Colors.white },
         headerShadowVisible: false,
         headerShown: Platform.OS !== 'web',
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'GolfJuegos ⛳' }} />
+      <Stack.Screen name="index" options={{ title: 'GolfJuegos' }} />
       <Stack.Screen name="new" options={{ title: 'Nueva Partida', headerBackTitle: 'Atrás' }} />
       <Stack.Screen name="[id]" options={{ title: 'Partida', headerBackTitle: 'Atrás' }} />
     </Stack>

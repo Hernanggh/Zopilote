@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Switch, useWindowDimensions } from 'react-native';
 import { Stack, useLocalSearchParams, Redirect, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/colors';
+import { Colors, Fonts } from '@/constants/colors';
 import {
   calcRelativeHandicaps, buildNetScoreMap, calcMarcas, calcIndividualAll,
   calcParejas, calcParejaBase, calcDineros,
@@ -17,8 +17,9 @@ type RoundData = {
   course_id: string;
   start_hole: number;
   status: string;
+  created_at: string;
   courses: { name: string };
-  round_players: { player_id: string; handicap: number; position: number; players: { name: string } }[];
+  round_players: { player_id: string; handicap: number; position: number; players: { name: string; suffix?: string | null } }[];
   round_game_config: { game_type: string; active: boolean; bet_amount: number }[];
   round_pairings: { pair_number: number; player1_id: string; player2_id: string }[];
   round_base_pair: { player1_id: string; player2_id: string }[];
@@ -35,7 +36,7 @@ function useRoundData(id: string) {
       const { data, error } = await supabase
         .from('rounds')
         .select(`id, course_id, start_hole, status, courses(name),
-          round_players(player_id, handicap, position, players(name)),
+          round_players(player_id, handicap, position, players(name, suffix)),
           round_game_config(game_type, active, bet_amount),
           round_pairings(pair_number, player1_id, player2_id),
           round_base_pair(player1_id, player2_id)`)
@@ -167,6 +168,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
   const [localMarcas, setLocalMarcas] = useState<MarcasEspMap>({});
   const [saveErr, setSaveErr] = useState('');
 
+  const { width: screenWidth } = useWindowDimensions();
   const players = [...round.round_players].sort((a, b) => a.position - b.position);
 
   const getValue = (pid: string, hole: number) => {
@@ -229,55 +231,83 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
   relHcps.forEach(r => { relHcpMap[r.id] = r.relative; });
 
   const COL_W = 52;
-  const HOLE_COL_W = 44;
-  const V_COL_W = 32;
+  const HOLE_COL_W = 56;
+  const V_COL_W = 56;
   const MARCA_COL_W = 48;
   const MARCA_LABEL_W = 20;
 
+  function playerInitials(name: string) {
+    return name.trim().split(/\s+/).map(w => w[0].toUpperCase()).join('');
+  }
+
+  function playerLabel(p: { players: { name: string; suffix?: string | null } }) {
+    const initials = playerInitials(p.players.name);
+    return p.players.suffix ? `${initials} ${p.players.suffix}` : initials;
+  }
+
+  // Scorecard symbols: only birdie and eagle
+  function scoreSymbol(gross: number, par: number): { double: boolean } | null {
+    const diff = gross - par;
+    if (diff <= -2) return { double: true };  // eagle or better
+    if (diff === -1) return { double: false }; // birdie
+    return null;
+  }
+
+  const FIXED_BG = Colors.creamDeep;
+
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }} contentInsetAdjustmentBehavior="automatic">
       {readonly && (
-        <View style={{ backgroundColor: Colors.warning + '22', padding: 12, borderBottomWidth: 1, borderColor: Colors.warning + '44' }}>
-          <Text style={{ color: Colors.warning, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>
-            Partida terminada · toca Editar para modificar scores
+        <View style={{ backgroundColor: Colors.gold + '22', padding: 10, borderBottomWidth: 1, borderColor: Colors.gold + '55' }}>
+          <Text style={{ color: Colors.goldText, fontWeight: '600', fontSize: 12, textAlign: 'center', fontFamily: Fonts.mono, letterSpacing: 0.5 }}>
+            PARTIDA CERRADA · TOCA EDITAR PARA MODIFICAR
           </Text>
         </View>
       )}
       {!!saveErr && (
-        <View style={{ backgroundColor: '#FFEBEE', margin: 12, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
-          <Text style={{ color: Colors.error, fontWeight: '600' }}>⚠️ Error guardando: {saveErr}</Text>
+        <View style={{ backgroundColor: '#FFEBEE', margin: 12, borderRadius: 6, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
+          <Text style={{ color: Colors.error, fontWeight: '600' }}>Error guardando: {saveErr}</Text>
         </View>
       )}
-      <ScrollView horizontal showsHorizontalScrollIndicator>
+
+      {/* Card wrapper */}
+      <View style={{ margin: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignSelf: 'flex-start' }}>
+        {/* Card header */}
+        <View style={{ backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10, borderTopLeftRadius: 8, borderTopRightRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ color: Colors.white, fontSize: 11, fontFamily: Fonts.mono, letterSpacing: 2 }}>SCORECARD</Text>
+          <Text style={{ color: Colors.gold, fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 1.5 }}>MARCAS</Text>
+        </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View>
-          {/* Header */}
-          <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingVertical: 10, alignItems: 'center' }}>
-            {/* Left: scores */}
-            <View style={{ width: HOLE_COL_W, alignItems: 'center' }}>
-              <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12 }}>H</Text>
+          {/* Header row */}
+          <View style={{ flexDirection: 'row', backgroundColor: Colors.greenMid, paddingVertical: 8, alignItems: 'center' }}>
+            {/* Fixed cols */}
+            <View style={{ width: HOLE_COL_W, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
+              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Hoyo</Text>
             </View>
-            <View style={{ width: 36, alignItems: 'center' }}>
-              <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12 }}>Par</Text>
+            <View style={{ width: 36, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
+              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Par</Text>
             </View>
-            <View style={{ width: V_COL_W, alignItems: 'center' }}>
-              <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12 }}>V</Text>
+            <View style={{ width: V_COL_W, alignItems: 'center', backgroundColor: Colors.greenDark, paddingVertical: 4 }}>
+              <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 0.5 }}>Ventaja</Text>
             </View>
             {players.map(p => (
-              <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', gap: 2 }}>
-                <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 12, textAlign: 'center' }} numberOfLines={1}>
-                  {p.players.name.split(' ')[0]}
+              <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', gap: 1 }}>
+                <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 12, fontFamily: Fonts.serif, textAlign: 'center' }} numberOfLines={1}>
+                  {playerLabel(p)}
                 </Text>
-                <Text style={{ color: Colors.greenLight, fontSize: 10 }}>
-                  {relHcpMap[p.player_id] ?? 0}
+                <Text style={{ color: Colors.gold + 'BB', fontSize: 9, fontFamily: Fonts.mono }}>
+                  HCP {relHcpMap[p.player_id] ?? 0}
                 </Text>
               </View>
             ))}
-            {/* Separator + Right: marcas */}
-            <View style={{ width: MARCA_LABEL_W, borderLeftWidth: 3, borderLeftColor: Colors.gold }} />
+            {/* Gold divider */}
+            <View style={{ width: MARCA_LABEL_W, borderLeftWidth: 2, borderLeftColor: Colors.gold, alignSelf: 'stretch' }} />
             {players.map(p => (
               <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
-                <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 12, textAlign: 'center' }} numberOfLines={1}>
-                  {p.players.name.split(' ')[0]}
+                <Text style={{ color: Colors.gold, fontWeight: '600', fontSize: 12, fontFamily: Fonts.serif, textAlign: 'center' }} numberOfLines={1}>
+                  {playerLabel(p)}
                 </Text>
               </View>
             ))}
@@ -288,127 +318,156 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
             const hole = holeMap[holeNum];
             const isNinth = holeNum === 9;
             const is18th = holeNum === 18;
-            const bg = idx % 2 === 0 ? Colors.card : Colors.background;
             return (
               <View key={holeNum}>
-                <View style={{ flexDirection: 'row', backgroundColor: bg, paddingVertical: 2, alignItems: 'center' }}>
-                  {/* Left: hole info */}
-                  <View style={{ width: HOLE_COL_W, alignItems: 'center' }}>
-                    <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.text }}>{holeNum}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+                  {/* Fixed cols */}
+                  <View style={{ width: HOLE_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontWeight: '700', fontSize: 14, color: Colors.text }}>{holeNum}</Text>
                   </View>
-                  <View style={{ width: 36, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 14, color: Colors.textSecondary }}>{hole?.par ?? ''}</Text>
+                  <View style={{ width: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: Colors.textSecondary }}>{hole?.par ?? ''}</Text>
                   </View>
-                  <View style={{ width: V_COL_W, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 13, color: Colors.textSecondary }}>{hole?.handicap_rank ?? ''}</Text>
+                  <View style={{ width: V_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: Colors.textSecondary }}>{hole?.handicap_rank ?? ''}</Text>
                   </View>
-                  {/* Left: score inputs */}
+                  {/* Score inputs */}
                   {players.map(p => {
                     const ventaja = hole && hole.handicap_rank <= (relHcpMap[p.player_id] ?? 0);
+                    const rawVal = getValue(p.player_id, holeNum);
+                    const gross = parseInt(rawVal, 10);
+                    const hasSaved = !isNaN(gross) && gross > 0 && !localScores[p.player_id]?.[holeNum];
+                    const sym = hasSaved && hole ? scoreSymbol(gross, hole.par) : null;
+                    const isUnsaved = !!localScores[p.player_id]?.[holeNum];
+                    const isOverPar = hasSaved && hole && gross > hole.par;
+                    const cellBg = ventaja ? 'rgba(255, 220, 0, 0.28)' : Colors.card;
+                    const scoreColor = readonly ? Colors.textSecondary : isOverPar ? Colors.error : Colors.text;
                     return (
-                      <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
+                      <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: cellBg, borderTopWidth: 1, borderTopColor: Colors.border + '55', paddingVertical: 4 }}>
+                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <TextInput
+                            ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
+                            value={rawVal}
+                            onChangeText={v => !readonly && handleChange(p.player_id, holeNum, v)}
+                            onBlur={() => !readonly && handleBlur(p.player_id, holeNum)}
+                            editable={!readonly}
+                            keyboardType="number-pad"
+                            inputMode="numeric"
+                            maxLength={2}
+                            style={{
+                              width: 36, height: 36,
+                              backgroundColor: 'transparent',
+                              borderRadius: 4,
+                              textAlign: 'center',
+                              fontSize: 17,
+                              fontFamily: Fonts.serif,
+                              fontWeight: '700',
+                              color: scoreColor,
+                              borderWidth: isUnsaved ? 1 : 0,
+                              borderColor: Colors.gold,
+                            }}
+                          />
+                          {sym && (
+                            <View pointerEvents="none" style={{
+                              position: 'absolute', width: 42, height: 42, borderRadius: 21,
+                              borderWidth: 1.5, borderColor: Colors.greenDark + 'BB',
+                              transform: [{ rotate: '5deg' }],
+                            }} />
+                          )}
+                          {sym?.double && (
+                            <View pointerEvents="none" style={{
+                              position: 'absolute', width: 50, height: 50, borderRadius: 25,
+                              borderWidth: 1.5, borderColor: Colors.greenDark + 'BB',
+                              transform: [{ rotate: '-4deg' }],
+                            }} />
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {/* Gold divider */}
+                  <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '55', borderLeftWidth: 2, borderLeftColor: Colors.gold }} />
+                  {/* Marca inputs */}
+                  {players.map(p => {
+                    const marcaVal = getMarcaValue(p.player_id, holeNum);
+                    const hasMarca = !!marcaVal;
+                    return (
+                      <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '55', paddingVertical: 4 }}>
                         <TextInput
-                          ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
-                          value={getValue(p.player_id, holeNum)}
-                          onChangeText={v => !readonly && handleChange(p.player_id, holeNum, v)}
-                          onBlur={() => !readonly && handleBlur(p.player_id, holeNum)}
+                          value={marcaVal}
+                          onChangeText={v => !readonly && handleMarcaChange(p.player_id, holeNum, v)}
                           editable={!readonly}
                           keyboardType="number-pad"
                           inputMode="numeric"
                           maxLength={2}
                           style={{
-                            width: 42,
-                            height: 38,
-                            backgroundColor: readonly ? Colors.background : ventaja ? '#FFFF0066' : getValue(p.player_id, holeNum) ? Colors.greenLight + '33' : Colors.background,
-                            borderRadius: 8,
+                            width: 36, height: 36,
+                            backgroundColor: hasMarca ? Colors.gold + '33' : 'transparent',
+                            borderRadius: 4,
                             textAlign: 'center',
-                            fontSize: 16,
+                            fontSize: 15,
+                            fontFamily: Fonts.serif,
                             fontWeight: '700',
-                            color: readonly ? Colors.textSecondary : Colors.text,
-                            borderWidth: 1,
-                            borderColor: readonly ? Colors.border : localScores[p.player_id]?.[holeNum] ? Colors.gold : ventaja ? '#CCCC00' : Colors.border,
+                            color: Colors.goldText,
+                            borderWidth: localMarcas[p.player_id]?.[holeNum] ? 1 : 0,
+                            borderColor: Colors.gold,
                           }}
                         />
                       </View>
                     );
                   })}
-                  {/* Separator */}
-                  <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 3, borderLeftColor: Colors.gold + '88' }} />
-                  {/* Right: marca inputs */}
-                  {players.map(p => (
-                    <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
-                      <TextInput
-                        value={getMarcaValue(p.player_id, holeNum)}
-                        onChangeText={v => !readonly && handleMarcaChange(p.player_id, holeNum, v)}
-                        editable={!readonly}
-                        keyboardType="number-pad"
-                        inputMode="numeric"
-                        maxLength={2}
-                        style={{
-                          width: 40,
-                          height: 38,
-                          backgroundColor: getMarcaValue(p.player_id, holeNum) ? Colors.gold + '33' : Colors.background,
-                          borderRadius: 8,
-                          textAlign: 'center',
-                          fontSize: 13,
-                          fontWeight: '700',
-                          color: Colors.text,
-                          borderWidth: 1,
-                          borderColor: localMarcas[p.player_id]?.[holeNum] ? Colors.gold : Colors.border,
-                        }}
-                      />
-                    </View>
-                  ))}
                 </View>
                 {(isNinth || is18th) && (
                   <>
                     {is18th && (() => {
                       const secondHalf = holeOrder.slice(9);
                       return (
-                        <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark + '99', paddingVertical: 6, alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', backgroundColor: Colors.greenMid, paddingVertical: 8, alignItems: 'center' }}>
                           <View style={{ width: HOLE_COL_W + 36 + V_COL_W, alignItems: 'center' }}>
-                            <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>2ª Vuelta</Text>
+                            <Text style={{ color: Colors.white, fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 1.5, fontWeight: '700' }}>2ª VUELTA</Text>
                           </View>
                           {players.map(p => {
                             const sum = secondHalf.reduce((s, h) => s + (grossMap[p.player_id]?.[h] ?? 0), 0);
                             return (
                               <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
-                                <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] }}>{sum || ''}</Text>
+                                <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 16, fontFamily: Fonts.serif }}>{sum || '—'}</Text>
                               </View>
                             );
                           })}
-                          <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 3, borderLeftColor: Colors.gold + '88' }} />
+                          <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 2, borderLeftColor: Colors.gold }} />
                           {players.map(p => {
                             const count = secondHalf.reduce((s, h) => s + (parseInt(marcasEspMap[p.player_id]?.[h] ?? '', 10) || 0), 0);
                             return (
                               <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
-                                <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] }}>{count > 0 ? count : ''}</Text>
+                                <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 15, fontFamily: Fonts.serif }}>{count > 0 ? String(count) : '—'}</Text>
                               </View>
                             );
                           })}
                         </View>
                       );
                     })()}
-                    <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark + 'CC', paddingVertical: 6, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', backgroundColor: isNinth ? Colors.greenMid : Colors.greenDark, paddingVertical: 8, alignItems: 'center' }}>
                       <View style={{ width: HOLE_COL_W + 36 + V_COL_W, alignItems: 'center' }}>
-                        <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>{isNinth ? '1ª Vuelta' : 'Total'}</Text>
+                        <Text style={{ color: isNinth ? Colors.white : Colors.gold, fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 1.5, fontWeight: '700' }}>
+                          {isNinth ? '1ª VUELTA' : 'TOTAL'}
+                        </Text>
                       </View>
                       {players.map(p => {
                         const halfHoles = isNinth ? holeOrder.slice(0, idx + 1) : holeOrder;
                         const sum = halfHoles.reduce((s, h) => s + (grossMap[p.player_id]?.[h] ?? 0), 0);
                         return (
                           <View key={p.player_id} style={{ width: COL_W, alignItems: 'center' }}>
-                            <Text style={{ color: Colors.white, fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] }}>{sum || ''}</Text>
+                            <Text style={{ color: isNinth ? Colors.white : Colors.gold, fontWeight: '700', fontSize: 16, fontFamily: Fonts.serif }}>{sum || '—'}</Text>
                           </View>
                         );
                       })}
-                      <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 3, borderLeftColor: Colors.gold + '88' }} />
+                      <View style={{ width: MARCA_LABEL_W, alignSelf: 'stretch', borderLeftWidth: 2, borderLeftColor: Colors.gold }} />
                       {players.map(p => {
                         const halfHoles = isNinth ? holeOrder.slice(0, idx + 1) : holeOrder;
                         const count = halfHoles.reduce((s, h) => s + (parseInt(marcasEspMap[p.player_id]?.[h] ?? '', 10) || 0), 0);
                         return (
                           <View key={p.player_id} style={{ width: MARCA_COL_W, alignItems: 'center' }}>
-                            <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] }}>{count > 0 ? count : ''}</Text>
+                            <Text style={{ color: Colors.gold, fontWeight: '700', fontSize: 15, fontFamily: Fonts.serif }}>{count > 0 ? String(count) : '—'}</Text>
                           </View>
                         );
                       })}
@@ -420,6 +479,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
           })}
         </View>
       </ScrollView>
+      </View>
     </ScrollView>
   );
 }
@@ -537,23 +597,23 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {/* Marcas / Plumas */}
       {marcas && (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🦚 Marcas / Plumas</Text>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Marcas / Plumas</Text>
           <View style={{ backgroundColor: Colors.card, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
             {/* Header */}
             <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 12, paddingVertical: 8 }}>
-              <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: Colors.white }}>Jugador</Text>
-              <Text style={{ width: 70, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.greenLight }}>Plumas</Text>
-              <Text style={{ width: 70, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.gold }}>Marcas</Text>
+              <Text style={{ flex: 1, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
+              <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>PLUMAS</Text>
+              <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>MARCAS</Text>
             </View>
             {playerIds.map((id, i) => {
               const marcasEspTotal = Object.values(marcasEspMap[id] ?? {}).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
               return (
-                <View key={id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: i % 2 === 0 ? Colors.card : Colors.background }}>
-                  <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{nameMap[id]}</Text>
-                  <Text style={{ width: 70, textAlign: 'center', fontSize: 14, fontWeight: '700', color: Colors.text, fontVariant: ['tabular-nums'] }}>
+                <View key={id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
+                  <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }}>{nameMap[id]}</Text>
+                  <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: Colors.text, fontVariant: ['tabular-nums'] }}>
                     {marcas.totals[id] ?? 0}
                   </Text>
-                  <Text style={{ width: 70, textAlign: 'center', fontSize: 14, fontWeight: '700', color: marcasEspTotal > 0 ? Colors.gold : Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
+                  <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: marcasEspTotal > 0 ? Colors.gold : Colors.textSecondary, fontVariant: ['tabular-nums'] }}>
                     {marcasEspTotal > 0 ? marcasEspTotal : '—'}
                   </Text>
                 </View>
@@ -566,7 +626,7 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {/* Individuales — matriz N×N */}
       {individualResults.length > 0 && (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏌️ Individuales</Text>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Individuales</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               {/* Column headers */}
@@ -574,7 +634,7 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                 <View style={{ width: ROW_H_W, padding: 8 }} />
                 {playerIds.map(id => (
                   <View key={id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
                       {nameMap[id]?.split(' ')[0]}
                     </Text>
                   </View>
@@ -584,12 +644,12 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
               {SECTIONS.map(section => (
                 <View key={section.key}>
                   <View style={{ backgroundColor: Colors.greenDark + 'BB', paddingVertical: 4, paddingHorizontal: 10 }}>
-                    <Text style={{ color: Colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>{section.label}</Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.white + 'CC' }}>{section.label.toUpperCase()}</Text>
                   </View>
                   {playerIds.map((rowId, ri) => (
-                    <View key={rowId} style={{ flexDirection: 'row', backgroundColor: ri % 2 === 0 ? section.bg : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '33' }}>
+                    <View key={rowId} style={{ flexDirection: 'row', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '44' }}>
                       <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }} numberOfLines={1}>
+                        <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.text }} numberOfLines={1}>
                           {nameMap[rowId]?.split(' ')[0]}
                         </Text>
                       </View>
@@ -602,20 +662,20 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                           <View key={colId} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, ...CELL_BORDER }}>
                             {cell ? (
                               <View style={{ alignItems: 'center', gap: 1 }}>
-                                <Text style={{ fontSize: 13, color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.match)}
                                 </Text>
-                                <Text style={{ fontSize: 13, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.medal)}
                                 </Text>
                                 {cell.presiones > 0 && (
-                                  <Text style={{ fontSize: 9, color: Colors.warning, fontWeight: '800' }}>
+                                  <Text style={{ fontFamily: Fonts.mono, fontSize: 9, color: Colors.warning, fontWeight: '700' }}>
                                     {'P'.repeat(cell.presiones)}
                                   </Text>
                                 )}
                               </View>
                             ) : (
-                              <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>—</Text>
+                              <Text style={{ fontFamily: Fonts.mono, color: Colors.textSecondary, fontSize: 12 }}>—</Text>
                             )}
                           </View>
                         );
@@ -632,14 +692,14 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {/* Parejas — matriz M×M */}
       {parejasResults.length > 0 && (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>👥 Parejas</Text>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Parejas</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
                 <View style={{ width: ROW_H_W, padding: 8 }} />
                 {pairIds.map(pid => (
                   <View key={pid} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
                       {pairName(pid)}
                     </Text>
                   </View>
@@ -649,12 +709,12 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
               {SECTIONS.map(section => (
                 <View key={section.key}>
                   <View style={{ backgroundColor: Colors.greenDark + 'BB', paddingVertical: 4, paddingHorizontal: 10 }}>
-                    <Text style={{ color: Colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>{section.label}</Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.white + 'CC' }}>{section.label.toUpperCase()}</Text>
                   </View>
                   {pairIds.map((rowPair, ri) => (
-                    <View key={rowPair} style={{ flexDirection: 'row', backgroundColor: ri % 2 === 0 ? section.bg : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '33' }}>
+                    <View key={rowPair} style={{ flexDirection: 'row', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '44' }}>
                       <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }} numberOfLines={1}>
+                        <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.text }} numberOfLines={1}>
                           {pairName(rowPair)}
                         </Text>
                       </View>
@@ -667,15 +727,15 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                           <View key={colPair} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, ...CELL_BORDER }}>
                             {cell ? (
                               <View style={{ alignItems: 'center', gap: 1 }}>
-                                <Text style={{ fontSize: 13, color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: valColor(cell.match), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.match)}
                                 </Text>
-                                <Text style={{ fontSize: 13, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
+                                <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: valColor(cell.medal), fontVariant: ['tabular-nums'] }}>
                                   {valStr(cell.medal)}
                                 </Text>
                               </View>
                             ) : (
-                              <Text style={{ color: Colors.textSecondary, fontSize: 12 }}>—</Text>
+                              <Text style={{ fontFamily: Fonts.mono, color: Colors.textSecondary, fontSize: 12 }}>—</Text>
                             )}
                           </View>
                         );
@@ -692,27 +752,27 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       {/* Pareja Base — fila única vs cada rival */}
       {parejaBaseResults.length > 0 && basePairData && (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.greenDark }}>🏆 Pareja Base</Text>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Pareja Base</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
               <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark }}>
                 <View style={{ width: ROW_H_W, padding: 8, justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.gold, textAlign: 'center' }} numberOfLines={2}>
+                  <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.gold, textAlign: 'center' }} numberOfLines={2}>
                     {nameMap[basePairData!.player1_id]?.split(' ')[0]}{'\n'}{nameMap[basePairData!.player2_id]?.split(' ')[0]}
                   </Text>
                 </View>
                 {parejaBaseResults.map(m => (
                   <View key={m.pairB} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 4, ...CELL_BORDER }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.white, textAlign: 'center' }} numberOfLines={2}>
                       {pairName(m.pairB, rivalPairs)}
                     </Text>
                   </View>
                 ))}
               </View>
               {SECTIONS.map((section, si) => (
-                <View key={section.key} style={{ flexDirection: 'row', backgroundColor: si % 2 === 0 ? section.bg : Colors.background, borderTopWidth: 1, borderColor: Colors.border + '33' }}>
+                <View key={section.key} style={{ flexDirection: 'row', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '44' }}>
                   <View style={{ width: ROW_H_W, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRightWidth: 1, borderColor: Colors.border + '44' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.text }}>{section.label}</Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>{section.label.toUpperCase()}</Text>
                   </View>
                   {parejaBaseResults.map(m => {
                     const v = m[section.key];
@@ -721,10 +781,10 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                     return (
                       <View key={m.pairB} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, ...CELL_BORDER }}>
                         <View style={{ alignItems: 'center', gap: 1 }}>
-                          <Text style={{ fontSize: 13, color: valColor(match), fontVariant: ['tabular-nums'] }}>
+                          <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: valColor(match), fontVariant: ['tabular-nums'] }}>
                             {valStr(match)}
                           </Text>
-                          <Text style={{ fontSize: 13, color: valColor(medal), fontVariant: ['tabular-nums'] }}>
+                          <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: valColor(medal), fontVariant: ['tabular-nums'] }}>
                             {valStr(medal)}
                           </Text>
                         </View>
@@ -739,9 +799,11 @@ function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       )}
 
       {playerIds.every(id => Object.keys(netMap[id] ?? {}).length === 0) && (
-        <View style={{ alignItems: 'center', marginTop: 40, gap: 8 }}>
-          <Text style={{ fontSize: 40 }}>📋</Text>
-          <Text style={{ color: Colors.textSecondary, fontSize: 15, textAlign: 'center' }}>Ingresa scores en la pestaña Scorecard para ver los resultados</Text>
+        <View style={{ alignItems: 'center', marginTop: 60, gap: 8 }}>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 22, color: Colors.textSecondary }}>Sin scores aún</Text>
+          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 14, color: Colors.textSecondary, textAlign: 'center' }}>
+            Ingresa los scores en el Scorecard para ver los resultados
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -816,31 +878,31 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
-      <View style={{ backgroundColor: Colors.card, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+      <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, padding: 10 }}>
-          <Text style={{ flex: 1, color: Colors.white, fontWeight: '700', fontSize: 13 }}>Jugador</Text>
+        <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10 }}>
+          <Text style={{ flex: 1, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
           {colGroups.map(g => (
-            <Text key={g.key} style={{ width: 72, textAlign: 'center', color: Colors.greenLight, fontSize: 11, fontWeight: '700' }}>{g.label}</Text>
+            <Text key={g.key} style={{ width: 72, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>{g.label.toUpperCase()}</Text>
           ))}
-          <Text style={{ width: 70, textAlign: 'right', color: Colors.gold, fontWeight: '800', fontSize: 13 }}>Total</Text>
+          <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>TOTAL</Text>
         </View>
 
         {/* Rows */}
         {dineros.sort((a, b) => b.total - a.total).map((row, i) => (
-          <View key={row.player_id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: i % 2 === 0 ? Colors.card : Colors.background }}>
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.text }} numberOfLines={1}>
-              {nameMap[row.player_id]?.split(' ')[0]}
+          <View key={row.player_id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
+            <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }} numberOfLines={1}>
+              {nameMap[row.player_id]}
             </Text>
             {colGroups.map(g => {
               const val = groupVal(row, g.fields);
               return (
-                <Text key={g.key} style={{ width: 72, textAlign: 'center', fontSize: 12, fontWeight: '700', color: color(val), fontVariant: ['tabular-nums'] }}>
+                <Text key={g.key} style={{ width: 72, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 13, fontWeight: '700', color: color(val), fontVariant: ['tabular-nums'] }}>
                   {val !== 0 ? fmt(val) : '—'}
                 </Text>
               );
             })}
-            <Text style={{ width: 70, textAlign: 'right', fontSize: 15, fontWeight: '800', color: color(row.total), fontVariant: ['tabular-nums'] }}>
+            <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: color(row.total), fontVariant: ['tabular-nums'] }}>
               {fmt(row.total)}
             </Text>
           </View>
@@ -848,9 +910,9 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
       </View>
 
       {/* Comprobación */}
-      <View style={{ marginTop: 12, alignItems: 'center' }}>
-        <Text style={{ fontSize: 12, color: Colors.textSecondary }}>
-          Suma total: ${dineros.reduce((s, r) => s + r.total, 0).toLocaleString('es-MX')} (debe ser $0)
+      <View style={{ marginTop: 10, alignItems: 'center' }}>
+        <Text style={{ fontFamily: Fonts.mono, fontSize: 10, color: Colors.textSecondary + 'AA', letterSpacing: 0.5 }}>
+          SUMA TOTAL: ${dineros.reduce((s, r) => s + r.total, 0).toLocaleString('es-MX')} (debe ser $0)
         </Text>
       </View>
     </ScrollView>
@@ -941,6 +1003,7 @@ export default function RoundScreen() {
   }
 
   function openSetup() {
+    if (!round) return;
     const configs: Record<string, { active: boolean; bet_amount: number }> = {};
     ALL_GAME_KEYS.forEach(k => { configs[k] = { active: false, bet_amount: 0 }; });
     round.round_game_config.forEach(g => { configs[g.game_type] = { active: g.active, bet_amount: g.bet_amount }; });
@@ -1022,74 +1085,61 @@ export default function RoundScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <Stack.Screen options={{
-        title: round.courses?.name ?? 'Partida',
-        headerBackTitle: 'Atrás',
-        headerRight: isActive ? () => (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              onPress={() => setConfirmModal('pause')}
-              style={{ backgroundColor: Colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: '600', color: Colors.text }}>Pausar</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setConfirmModal('finish')}
-              style={{ backgroundColor: Colors.error + '22', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.error }}>Terminar</Text>
-            </Pressable>
-          </View>
-        ) : undefined,
-      }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
       {/* Tab bar */}
-      <View style={{ flexDirection: 'row', backgroundColor: Colors.card, borderBottomWidth: 1, borderColor: Colors.border, alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', backgroundColor: Colors.background, borderBottomWidth: 1, borderColor: Colors.border, alignItems: 'center' }}>
         {TABS.map(tab => (
           <Pressable
             key={tab}
             onPress={() => setActiveTab(tab)}
-            style={{ flex: 1, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: activeTab === tab ? Colors.green : 'transparent' }}
+            style={{ paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: activeTab === tab ? Colors.gold : 'transparent' }}
           >
-            <Text style={{ fontSize: 14, fontWeight: activeTab === tab ? '700' : '500', color: activeTab === tab ? Colors.green : Colors.textSecondary }}>
-              {tab}
+            <Text style={{
+              fontSize: 11, letterSpacing: 1.5,
+              fontFamily: Fonts.mono,
+              fontWeight: activeTab === tab ? '700' : '400',
+              color: activeTab === tab ? Colors.text : Colors.textSecondary,
+            }}>
+              {tab.toUpperCase()}
             </Text>
           </Pressable>
         ))}
+        <View style={{ flex: 1 }} />
         {isActive ? (
           <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10, alignItems: 'center' }}>
-            <Pressable onPress={openSetup} style={{ paddingHorizontal: 6, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 18 }}>⚙️</Text>
+            <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
             </Pressable>
             <Pressable
               onPress={() => setConfirmModal('pause')}
-              style={{ backgroundColor: Colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }}>Pausar</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>PAUSAR</Text>
             </Pressable>
             <Pressable
               onPress={() => setConfirmModal('finish')}
-              style={{ backgroundColor: Colors.error + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{ borderWidth: 1, borderColor: Colors.error + '88', borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.error }}>Terminar</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.error, fontFamily: Fonts.mono }}>TERMINAR</Text>
             </Pressable>
           </View>
         ) : (
           <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 10, alignItems: 'center' }}>
-            <Pressable onPress={openSetup} style={{ paddingHorizontal: 6, paddingVertical: 6 }}>
-              <Text style={{ fontSize: 18 }}>⚙️</Text>
+            <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
             </Pressable>
             <Pressable
               onPress={() => router.replace('/')}
-              style={{ backgroundColor: Colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.text }}>Regresar</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>REGRESAR</Text>
             </Pressable>
             <Pressable
               onPress={doEdit}
-              style={{ backgroundColor: Colors.green + '22', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 }}
+              style={{ borderWidth: 1, borderColor: Colors.gold, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 5 }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.green }}>Editar</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>EDITAR</Text>
             </Pressable>
           </View>
         )}
@@ -1106,13 +1156,13 @@ export default function RoundScreen() {
           <View style={{ flex: 1, backgroundColor: Colors.background, marginTop: 60, borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: Colors.card, borderBottomWidth: 1, borderColor: Colors.border }}>
               <Pressable onPress={() => setShowSetup(false)}>
-                <Text style={{ fontSize: 16, color: Colors.textSecondary }}>Cancelar</Text>
+                <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary }}>CANCELAR</Text>
               </Pressable>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.text }}>Configuración</Text>
+              <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>Configuración</Text>
               <Pressable onPress={saveSetup} disabled={setupSaving}>
                 {setupSaving
-                  ? <ActivityIndicator size="small" color={Colors.green} />
-                  : <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.green }}>Guardar</Text>}
+                  ? <ActivityIndicator size="small" color={Colors.greenDark} />
+                  : <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, fontWeight: '700', color: Colors.goldText }}>GUARDAR</Text>}
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 24, paddingBottom: 40 }}>{(() => {
@@ -1123,31 +1173,32 @@ export default function RoundScreen() {
               return (
                 <>
                   {!!setupErr && (
-                    <View style={{ backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
-                      <Text style={{ color: Colors.error, fontWeight: '600', fontSize: 13 }}>⚠️ {setupErr}</Text>
+                    <View style={{ backgroundColor: Colors.error + '15', borderRadius: 4, padding: 12, borderLeftWidth: 3, borderLeftColor: Colors.error }}>
+                      <Text style={{ fontFamily: Fonts.mono, color: Colors.error, fontSize: 12 }}>{setupErr}</Text>
                     </View>
                   )}
 
                   {/* Juegos */}
                   <View style={{ gap: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>JUEGOS Y APUESTAS</Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>JUEGOS Y APUESTAS</Text>
                     {ALL_GAME_KEYS.map(k => (
-                      <View key={k} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
+                      <View key={k} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
                         <Switch
                           value={setupGames[k]?.active ?? false}
                           onValueChange={v => setSetupGames(prev => ({ ...prev, [k]: { ...prev[k], active: v } }))}
-                          trackColor={{ false: Colors.border, true: Colors.green }}
+                          trackColor={{ false: Colors.border, true: Colors.greenDark }}
+                          thumbColor={setupGames[k]?.active ? Colors.gold : Colors.white}
                         />
-                        <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{GAME_LABELS_SETUP[k]}</Text>
+                        <Text style={{ fontFamily: Fonts.serif, flex: 1, fontSize: 15, color: Colors.text }}>{GAME_LABELS_SETUP[k]}</Text>
                         {k !== 'presiones' && (
                           <>
                             <TextInput
                               value={String(setupGames[k]?.bet_amount ?? 0)}
                               onChangeText={v => setSetupGames(prev => ({ ...prev, [k]: { ...prev[k], bet_amount: parseInt(v, 10) || 0 } }))}
                               keyboardType="number-pad"
-                              style={{ width: 72, textAlign: 'right', fontSize: 15, fontWeight: '700', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, padding: 6, borderWidth: 1, borderColor: Colors.border }}
+                              style={{ fontFamily: Fonts.mono, width: 60, textAlign: 'right', fontSize: 15, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 2 }}
                             />
-                            <Text style={{ fontSize: 12, color: Colors.textSecondary }}>$</Text>
+                            <Text style={{ fontFamily: Fonts.mono, fontSize: 11, color: Colors.textSecondary }}>$</Text>
                           </>
                         )}
                       </View>
@@ -1157,18 +1208,18 @@ export default function RoundScreen() {
                   {/* Parejas */}
                   {needsPairings && (
                     <View style={{ gap: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>ASIGNACIÓN DE PAREJAS</Text>
+                      <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>ASIGNACIÓN DE PAREJAS</Text>
                       {setupPairings.map((pair, idx) => (
-                        <View key={idx} style={{ backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
+                        <View key={idx} style={{ backgroundColor: Colors.card, borderRadius: 6, padding: 14, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary }}>PAREJA {pair.pair_number}</Text>
+                            <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>PAREJA {pair.pair_number}</Text>
                             <Pressable onPress={() => setSetupPairings(prev => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, pair_number: i + 1 })))}>
-                              <Text style={{ fontSize: 18, color: Colors.error }}>×</Text>
+                              <Text style={{ fontFamily: Fonts.mono, fontSize: 14, color: Colors.textSecondary + '88' }}>×</Text>
                             </Pressable>
                           </View>
                           {(['p1', 'p2'] as const).map((field, fi) => (
-                            <View key={field} style={{ gap: 4 }}>
-                              <Text style={{ fontSize: 11, color: Colors.textSecondary }}>Jugador {fi + 1}</Text>
+                            <View key={field} style={{ gap: 6 }}>
+                              <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary + '88' }}>JUGADOR {fi + 1}</Text>
                               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                                 {playerOpts.map(opt => {
                                   const isSelected = pair[field] === opt.value;
@@ -1180,9 +1231,9 @@ export default function RoundScreen() {
                                       key={opt.value}
                                       disabled={disabled && !isSelected}
                                       onPress={() => setSetupPairings(prev => prev.map((p, i) => i === idx ? { ...p, [field]: opt.value } : p))}
-                                      style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: isSelected ? Colors.green : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.green : Colors.border, opacity: disabled && !isSelected ? 0.3 : 1 }}
+                                      style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: disabled && !isSelected ? 0.3 : 1 }}
                                     >
-                                      <Text style={{ fontSize: 13, color: isSelected ? Colors.white : Colors.text, fontWeight: isSelected ? '700' : '400' }}>{opt.label.split(' ')[0]}</Text>
+                                      <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label.split(' ')[0]}</Text>
                                     </Pressable>
                                   );
                                 })}
@@ -1198,9 +1249,9 @@ export default function RoundScreen() {
                             const avail = sortedPlayers.filter(p => !used.includes(p.player_id));
                             setSetupPairings(prev => [...prev, { pair_number: prev.length + 1, p1: avail[0]?.player_id ?? '', p2: avail[1]?.player_id ?? '' }]);
                           }}
-                          style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.green, borderRadius: 10, padding: 12, alignItems: 'center' }}
+                          style={{ borderStyle: 'dashed', borderWidth: 1.5, borderColor: Colors.border, borderRadius: 6, paddingVertical: 14, alignItems: 'center' }}
                         >
-                          <Text style={{ color: Colors.green, fontWeight: '600' }}>+ Pareja {setupPairings.length + 1}</Text>
+                          <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: Colors.textSecondary }}>+ PAREJA {setupPairings.length + 1}</Text>
                         </Pressable>
                       )}
                     </View>
@@ -1209,11 +1260,11 @@ export default function RoundScreen() {
                   {/* Pareja Base */}
                   {needsBasePair && (
                     <View style={{ gap: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>PAREJA BASE</Text>
-                      <View style={{ backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.greenDark + '66', gap: 10 }}>
+                      <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>PAREJA BASE</Text>
+                      <View style={{ backgroundColor: Colors.card, borderRadius: 6, padding: 14, borderWidth: 1, borderColor: Colors.gold + '44', gap: 10 }}>
                         {(['p1', 'p2'] as const).map((field, fi) => (
-                          <View key={field} style={{ gap: 4 }}>
-                            <Text style={{ fontSize: 11, color: Colors.textSecondary }}>Jugador {fi + 1}</Text>
+                          <View key={field} style={{ gap: 6 }}>
+                            <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary + '88' }}>JUGADOR {fi + 1}</Text>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                               {playerOpts.map(opt => {
                                 const isSelected = setupBasePair?.[field] === opt.value;
@@ -1223,9 +1274,9 @@ export default function RoundScreen() {
                                     key={opt.value}
                                     disabled={other === opt.value}
                                     onPress={() => setSetupBasePair(prev => ({ ...(prev ?? { p1: '', p2: '' }), [field]: opt.value }))}
-                                    style={{ borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.greenDark : Colors.border, opacity: other === opt.value ? 0.3 : 1 }}
+                                    style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: other === opt.value ? 0.3 : 1 }}
                                   >
-                                    <Text style={{ fontSize: 13, color: isSelected ? Colors.white : Colors.text, fontWeight: isSelected ? '700' : '400' }}>{opt.label.split(' ')[0]}</Text>
+                                    <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label.split(' ')[0]}</Text>
                                   </Pressable>
                                 );
                               })}
@@ -1238,15 +1289,16 @@ export default function RoundScreen() {
 
                   {/* Handicaps */}
                   <View style={{ gap: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.5 }}>HANDICAPS</Text>
-                    {sortedPlayers.map(p => (
-                      <View key={p.player_id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border }}>
-                        <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{p.players.name}</Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>HANDICAPS</Text>
+                    {sortedPlayers.map((p, i) => (
+                      <View key={p.player_id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border }}>
+                        <Text style={{ fontFamily: Fonts.serif, flex: 1, fontSize: 16, color: Colors.text }}>{p.players.name}</Text>
+                        <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary, marginRight: 8 }}>HCP</Text>
                         <TextInput
                           value={String(setupHandicaps[p.player_id] ?? p.handicap)}
                           onChangeText={v => setSetupHandicaps(prev => ({ ...prev, [p.player_id]: parseInt(v, 10) || 0 }))}
                           keyboardType="number-pad"
-                          style={{ width: 64, textAlign: 'center', fontSize: 16, fontWeight: '700', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, padding: 6, borderWidth: 1, borderColor: Colors.border }}
+                          style={{ fontFamily: Fonts.mono, width: 48, textAlign: 'center', fontSize: 16, fontWeight: '700', color: Colors.text, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 2 }}
                         />
                       </View>
                     ))}

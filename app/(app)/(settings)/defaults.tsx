@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Switch, TextInput, Pressable, ActivityIndicator
 import { Stack } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/colors';
+import { Colors, Fonts } from '@/constants/colors';
 
 const ALL_GAME_KEYS = [
   'marcas', 'marcas_esp', 'individuales', 'individuales_medal',
@@ -68,54 +68,72 @@ export default function Defaults() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}>
-      <Stack.Screen options={{
-        title: 'Juegos por defecto',
-        headerRight: () => (
-          <Pressable onPress={save} disabled={saving || !games} style={{ paddingHorizontal: 4 }}>
-            {saving
-              ? <ActivityIndicator size="small" color={Colors.green} />
-              : <Text style={{ fontSize: 16, fontWeight: '700', color: saved ? Colors.success : Colors.green }}>
-                  {saved ? '✓ Guardado' : 'Guardar'}
-                </Text>
-            }
-          </Pressable>
-        ),
-      }} />
+    <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Page header */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 }}>
+        <View style={{ gap: 4 }}>
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Juegos por defecto</Text>
+          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
+            Se pre-cargan al crear una nueva partida
+          </Text>
+        </View>
+        <Pressable
+          onPress={save}
+          disabled={saving || !games}
+          style={{ borderWidth: 1, borderColor: saved ? Colors.success : Colors.gold, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 8, marginTop: 6 }}
+        >
+          {saving
+            ? <ActivityIndicator size="small" color={Colors.gold} />
+            : <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: saved ? Colors.success : Colors.goldText }}>
+                {saved ? 'GUARDADO' : 'GUARDAR'}
+              </Text>
+          }
+        </Pressable>
+      </View>
 
       {!!err && (
-        <View style={{ backgroundColor: '#FFEBEE', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.error }}>
-          <Text style={{ color: Colors.error, fontWeight: '600' }}>⚠️ {err}</Text>
+        <View style={{ backgroundColor: Colors.error + '15', borderRadius: 4, padding: 12, borderLeftWidth: 3, borderLeftColor: Colors.error }}>
+          <Text style={{ fontFamily: Fonts.mono, fontSize: 12, color: Colors.error }}>{err}</Text>
         </View>
       )}
 
-      <Text style={{ fontSize: 13, color: Colors.textSecondary, lineHeight: 18 }}>
-        Estos valores se pre-cargan al crear una nueva partida.
-      </Text>
-
       {!games ? (
-        <ActivityIndicator color={Colors.green} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={Colors.greenDark} style={{ marginTop: 40 }} />
       ) : (
-        <View style={{ gap: 8 }}>
-          {ALL_GAME_KEYS.map(k => (
-            <View key={k} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: Colors.border, gap: 10 }}>
-              <Switch
-                value={games[k].active}
-                onValueChange={v => setGames(prev => prev ? { ...prev, [k]: { ...prev[k], active: v } } : prev)}
-                trackColor={{ false: Colors.border, true: Colors.green }}
-              />
-              <Text style={{ flex: 1, fontSize: 14, color: Colors.text }}>{GAME_LABELS[k]}</Text>
-              {k !== 'presiones' && (
-                <>
-                  <TextInput
-                    value={String(games[k].bet_amount)}
-                    onChangeText={v => setGames(prev => prev ? { ...prev, [k]: { ...prev[k], bet_amount: parseInt(v, 10) || 0 } } : prev)}
-                    keyboardType="number-pad"
-                    style={{ width: 72, textAlign: 'right', fontSize: 15, fontWeight: '700', color: Colors.text, backgroundColor: Colors.background, borderRadius: 8, padding: 6, borderWidth: 1, borderColor: Colors.border }}
-                  />
-                  <Text style={{ fontSize: 12, color: Colors.textSecondary }}>$</Text>
-                </>
-              )}
+        <View style={{ backgroundColor: Colors.card, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+          {ALL_GAME_KEYS.map((k, i) => (
+            <View key={k}>
+              {i > 0 && <View style={{ height: 1, backgroundColor: Colors.border, marginLeft: 18 }} />}
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, gap: 12 }}>
+                <Switch
+                  value={games[k].active}
+                  onValueChange={v => setGames(prev => prev ? { ...prev, [k]: { ...prev[k], active: v } } : prev)}
+                  trackColor={{ false: Colors.border, true: Colors.greenDark }}
+                  thumbColor={games[k].active ? Colors.gold : Colors.white}
+                />
+                <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 16, color: games[k].active ? Colors.text : Colors.textSecondary }}>
+                  {GAME_LABELS[k]}
+                </Text>
+                {k !== 'presiones' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TextInput
+                      value={String(games[k].bet_amount)}
+                      onChangeText={v => setGames(prev => prev ? { ...prev, [k]: { ...prev[k], bet_amount: parseInt(v, 10) || 0 } } : prev)}
+                      keyboardType="number-pad"
+                      style={{
+                        width: 64, textAlign: 'right',
+                        fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700',
+                        color: games[k].active ? Colors.text : Colors.textSecondary,
+                        borderBottomWidth: 1, borderColor: Colors.border,
+                        paddingVertical: 4,
+                      }}
+                    />
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 11, color: Colors.textSecondary }}>$</Text>
+                  </View>
+                )}
+              </View>
             </View>
           ))}
         </View>
