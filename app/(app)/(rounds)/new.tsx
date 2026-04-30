@@ -234,6 +234,7 @@ export default function NewRound() {
         if (bpErr) throw bpErr;
       }
 
+      supabase.functions.invoke('send-round-invitation', { body: { roundId } }).catch(() => {});
       router.replace(`/${roundId}`);
     } catch (e: any) {
       setErrorMsg(e.message ?? 'Error al crear la partida');
