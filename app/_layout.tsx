@@ -5,6 +5,9 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { StatusBar } from 'expo-status-bar';
 
+// Token pendiente guardado en memoria durante el flujo de auth
+let pendingInviteToken: string | null = null;
+
 const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -34,8 +37,23 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (session === undefined) return;
     if (isRecovery.current) return;
     const inAuth = segments[0] === '(auth)';
-    if (!session && !inAuth) router.replace('/(auth)/login');
-    if (session && inAuth) router.replace('/(app)/(rounds)');
+    const inJoin = segments[0] === 'join';
+
+    if (!session) {
+      if (inJoin && segments[1]) pendingInviteToken = segments[1];
+      if (!inAuth) router.replace('/(auth)/login');
+      return;
+    }
+
+    if (inAuth) {
+      if (pendingInviteToken) {
+        const token = pendingInviteToken;
+        pendingInviteToken = null;
+        router.replace(`/join/${token}` as any);
+      } else {
+        router.replace('/(app)/(rounds)');
+      }
+    }
   }, [session, segments]);
 
   if (session === undefined) return null;
@@ -50,6 +68,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(app)" />
+          <Stack.Screen name="join" />
         </Stack>
       </AuthGate>
     </QueryClientProvider>

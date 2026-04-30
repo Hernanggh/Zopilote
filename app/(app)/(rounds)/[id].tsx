@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Switch, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TextInput, Pressable, ActivityIndicator, Switch, useWindowDimensions, Platform, Share, Alert } from 'react-native';
 import { Stack, useLocalSearchParams, Redirect, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -1028,6 +1028,46 @@ export default function RoundScreen() {
     qc.invalidateQueries({ queryKey: ['round', id] });
   }
 
+  async function shareRound() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Reusar token existente no expirado, o crear uno nuevo
+    let token: string;
+    const { data: existing } = await supabase
+      .from('round_invitations')
+      .select('token')
+      .eq('round_id', id)
+      .eq('created_by', user.id)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (existing?.token) {
+      token = existing.token;
+    } else {
+      const { data: created, error } = await supabase
+        .from('round_invitations')
+        .insert({ round_id: id, created_by: user.id })
+        .select('token')
+        .single();
+      if (error || !created) return;
+      token = created.token;
+    }
+
+    const url = Platform.OS === 'web'
+      ? `${window.location.origin}/join/${token}`
+      : `zopilote://join/${token}`;
+
+    if (Platform.OS === 'web') {
+      await navigator.clipboard.writeText(url);
+      Alert.alert('Link copiado', 'Comparte el link con los jugadores.');
+    } else {
+      Share.share({ message: url, url });
+    }
+  }
+
   function openSetup() {
     if (!round) return;
     const configs: Record<string, { active: boolean; bet_amount: number }> = {};
@@ -1139,6 +1179,9 @@ export default function RoundScreen() {
           {isOrganizer ? (
             isActive ? (
               <>
+                <Pressable onPress={shareRound} style={{ borderWidth: 1, borderColor: Colors.gold + '88', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>COMPARTIR</Text>
+                </Pressable>
                 <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
                   <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
                 </Pressable>
@@ -1151,6 +1194,9 @@ export default function RoundScreen() {
               </>
             ) : (
               <>
+                <Pressable onPress={shareRound} style={{ borderWidth: 1, borderColor: Colors.gold + '88', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>COMPARTIR</Text>
+                </Pressable>
                 <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
                   <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
                 </Pressable>
