@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, KeyboardAvoidingView, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, KeyboardAvoidingView, ScrollView, ActivityIndicator, Platform, Image } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 
@@ -80,11 +80,9 @@ export default function LoginScreen() {
 
         {/* Logo */}
         <View style={{ alignItems: 'center', marginBottom: 48 }}>
-          <Text style={{ fontSize: 56 }}>⛳</Text>
-          <Text style={{ fontFamily: Fonts.serif, fontSize: 32, color: Colors.greenDark, marginTop: 8 }}>GolfJuegos</Text>
-          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 15, color: Colors.textSecondary, marginTop: 4 }}>
-            Calcula tus apuestas al instante
-          </Text>
+          <Image source={require('@/assets/images/logo-transparent.png')} style={{ width: 100, height: 100 }} />
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 32, color: Colors.greenDark, marginTop: 12 }}>Zopilote</Text>
+
         </View>
 
         <View style={{ gap: 14 }}>

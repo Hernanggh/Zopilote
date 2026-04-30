@@ -887,7 +887,7 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
     return fields.reduce((s, f) => s + ((row as any)[f] ?? 0), 0);
   }
 
-  const NAME_W = 90;
+  const NAME_W = 130;
   const COL_W = 72;
 
   return (
@@ -907,7 +907,7 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
             {/* Rows */}
             {dineros.sort((a, b) => b.total - a.total).map((row, i) => (
               <View key={row.player_id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
-                <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }} numberOfLines={1}>
+                <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }}>
                   {displayMap[row.player_id]}
                 </Text>
                 {colGroups.map(g => {

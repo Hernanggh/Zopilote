@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { Tabs, useSegments } from 'expo-router';
-import { View, Text, Pressable, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Platform, useWindowDimensions, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Fonts } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,10 +32,12 @@ export default function AppLayout() {
           minHeight: 56,
         }}>
           {/* Logo */}
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
-            <Text style={{ color: Colors.gold, fontSize: 13 }}>⚑</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ backgroundColor: Colors.background, borderRadius: 4, padding: 2 }}>
+              <Image source={require('@/assets/images/logo-transparent.png')} style={{ width: 36, height: 36 }} />
+            </View>
             <Text style={{ color: Colors.white, fontSize: 17, letterSpacing: 3, fontFamily: Fonts.serif }}>
-              GOLFJUEGOS
+              ZOPILOTE
             </Text>
             <Text style={{ color: Colors.gold + 'AA', fontSize: 11, fontFamily: Fonts.fraunces, fontStyle: 'italic', letterSpacing: 0.5 }}>
               — established 2026 —

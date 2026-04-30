@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions, Image } from 'react-native';
 import { Stack, useRouter, Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -73,10 +73,12 @@ export default function RoundsHome() {
           borderBottomWidth: 2, borderBottomColor: Colors.gold,
           gap: 2,
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
-            <Text style={{ color: Colors.gold, fontSize: 15 }}>⚑</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ backgroundColor: Colors.background, borderRadius: 4, padding: 2 }}>
+              <Image source={require('@/assets/images/logo-transparent.png')} style={{ width: 40, height: 40 }} />
+            </View>
             <Text style={{ color: Colors.white, fontSize: 22, letterSpacing: 4, fontFamily: Fonts.serif }}>
-              GOLFJUEGOS
+              ZOPILOTE
             </Text>
           </View>
           <Text style={{ color: Colors.gold + 'AA', fontSize: 11, fontFamily: Fonts.fraunces, fontStyle: 'italic', letterSpacing: 0.5 }}>

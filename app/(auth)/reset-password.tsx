@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, KeyboardAvoidingView, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, KeyboardAvoidingView, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
@@ -43,8 +43,8 @@ export default function ResetPasswordScreen() {
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 32 }}>
 
         <View style={{ alignItems: 'center', marginBottom: 48 }}>
-          <Text style={{ fontSize: 56 }}>⛳</Text>
-          <Text style={{ fontFamily: Fonts.serif, fontSize: 32, color: Colors.greenDark, marginTop: 8 }}>GolfJuegos</Text>
+          <Image source={require('@/assets/images/logo-transparent.png')} style={{ width: 100, height: 100 }} />
+          <Text style={{ fontFamily: Fonts.serif, fontSize: 32, color: Colors.greenDark, marginTop: 12 }}>Zopilote</Text>
           <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 15, color: Colors.textSecondary, marginTop: 4 }}>
             Nueva contraseña
           </Text>

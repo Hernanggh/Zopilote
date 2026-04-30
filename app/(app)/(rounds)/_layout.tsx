@@ -13,7 +13,7 @@ export default function RoundsLayout() {
         headerShown: Platform.OS !== 'web',
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'GolfJuegos' }} />
+      <Stack.Screen name="index" options={{ title: 'Zopilote' }} />
       <Stack.Screen name="new" options={{ title: 'Nueva Partida', headerBackTitle: 'Atrás' }} />
       <Stack.Screen name="[id]" options={{ title: 'Partida', headerBackTitle: 'Atrás' }} />
     </Stack>
