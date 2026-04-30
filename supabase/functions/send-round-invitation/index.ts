@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
     // Send email to each player with an email
     const sends = (roundPlayers ?? [])
-      .filter((rp: any) => rp.players?.email)
+      .filter((rp: any) => rp.players?.email && rp.players?.user_id !== round.created_by)
       .map(async (rp: any) => {
         const player = rp.players;
         const hoyo = round.start_hole === 10 ? 'Hoyo 10' : 'Hoyo 1';

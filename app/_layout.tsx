@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { View, Image } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Session } from '@supabase/supabase-js';
@@ -12,9 +13,11 @@ const queryClient = new QueryClient();
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [showSplash, setShowSplash] = useState(false);
   const router = useRouter();
   const segments = useSegments();
   const isRecovery = useRef(false);
+  const prevSession = useRef<Session | null | undefined>(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -40,21 +43,49 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const inJoin = segments[0] === 'join';
 
     if (!session) {
+      prevSession.current = null;
       if (inJoin && segments[1]) pendingInviteToken = segments[1];
       if (!inAuth) router.replace('/(auth)/login');
       return;
     }
 
     if (inAuth) {
-      if (pendingInviteToken) {
-        const token = pendingInviteToken;
-        pendingInviteToken = null;
-        router.replace(`/join/${token}` as any);
+      const justLoggedIn = prevSession.current === null;
+      prevSession.current = session;
+
+      const navigate = () => {
+        if (pendingInviteToken) {
+          const token = pendingInviteToken;
+          pendingInviteToken = null;
+          router.replace(`/join/${token}` as any);
+        } else {
+          router.replace('/(app)/(rounds)');
+        }
+      };
+
+      if (justLoggedIn) {
+        setShowSplash(true);
+        setTimeout(() => {
+          setShowSplash(false);
+          navigate();
+        }, 1500);
       } else {
-        router.replace('/(app)/(rounds)');
+        navigate();
       }
     }
   }, [session, segments]);
+
+  if (showSplash) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F5F0E8', justifyContent: 'center', alignItems: 'center' }}>
+        <Image
+          source={require('@/assets/images/logo-transparent.png')}
+          style={{ width: 220, height: 220 }}
+          resizeMode="contain"
+        />
+      </View>
+    );
+  }
 
   if (session === undefined) return null;
   return <>{children}</>;

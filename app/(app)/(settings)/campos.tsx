@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -23,6 +23,26 @@ export default function Campos() {
       return data;
     },
   });
+
+  async function deleteCourse(course: Course) {
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm(`¿Eliminar "${course.name}"? Esta acción no se puede deshacer.`)
+      : await new Promise<boolean>(resolve =>
+          Alert.alert('Eliminar campo', `¿Eliminar "${course.name}"? Esta acción no se puede deshacer.`, [
+            { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Eliminar', style: 'destructive', onPress: () => resolve(true) },
+          ])
+        );
+    if (!confirmed) return;
+    const { error } = await supabase.from('courses').delete().eq('id', course.id);
+    if (error) {
+      Platform.OS === 'web'
+        ? window.alert(`Error: ${error.message}`)
+        : Alert.alert('Error', error.message);
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ['courses'] });
+  }
 
   async function createCourse() {
     if (!newName.trim()) return;
@@ -103,18 +123,27 @@ export default function Campos() {
           {courses.map((course, i) => (
             <View key={course.id}>
               {i > 0 && <View style={{ height: 1, backgroundColor: Colors.border, marginLeft: 18 }} />}
-              <Pressable
-                onPress={() => router.push(`/(app)/(settings)/campo/${course.id}` as any)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row', alignItems: 'center',
-                  paddingHorizontal: 18, paddingVertical: 14,
-                  backgroundColor: pressed ? Colors.creamDeep : Colors.card,
-                  gap: 12,
-                })}
-              >
-                <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{course.name}</Text>
-                <Text style={{ fontFamily: Fonts.mono, fontSize: 18, color: Colors.textSecondary + '88' }}>›</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Pressable
+                  onPress={() => router.push(`/(app)/(settings)/campo/${course.id}` as any)}
+                  style={({ pressed }) => ({
+                    flex: 1, flexDirection: 'row', alignItems: 'center',
+                    paddingHorizontal: 18, paddingVertical: 14,
+                    backgroundColor: pressed ? Colors.creamDeep : Colors.card,
+                    gap: 12,
+                  })}
+                >
+                  <Text style={{ flex: 1, fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{course.name}</Text>
+                  <Text style={{ fontFamily: Fonts.mono, fontSize: 18, color: Colors.textSecondary + '88' }}>›</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => deleteCourse(course)}
+                  style={{ paddingHorizontal: 16, paddingVertical: 14 }}
+                  hitSlop={8}
+                >
+                  <Text style={{ fontFamily: Fonts.mono, fontSize: 18, color: Colors.error + 'AA' }}>×</Text>
+                </Pressable>
+              </View>
             </View>
           ))}
         </View>

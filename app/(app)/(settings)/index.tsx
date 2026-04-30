@@ -43,7 +43,10 @@ export default function SettingsIndex() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Page title */}
-      <View style={{ paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4, gap: 12 }}>
+        <Pressable onPress={() => router.replace('/(app)/(rounds)')}>
+          <Text style={{ fontFamily: Fonts.mono, fontSize: 11, letterSpacing: 1, color: Colors.textSecondary }}>‹ REGRESAR</Text>
+        </Pressable>
         <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Configuración</Text>
       </View>
 
