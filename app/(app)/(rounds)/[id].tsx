@@ -898,10 +898,10 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
             {/* Header */}
             <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10 }}>
               <Text style={{ width: NAME_W, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
+              <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>TOTAL</Text>
               {colGroups.map(g => (
                 <Text key={g.key} style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>{g.label.toUpperCase()}</Text>
               ))}
-              <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>TOTAL</Text>
             </View>
 
             {/* Rows */}
@@ -909,6 +909,9 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
               <View key={row.player_id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
                 <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }}>
                   {displayMap[row.player_id]}
+                </Text>
+                <Text style={{ width: 70, textAlign: 'center', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: color(row.total), fontVariant: ['tabular-nums'] }}>
+                  {fmt(row.total)}
                 </Text>
                 {colGroups.map(g => {
                   const val = groupVal(row, g.fields);
@@ -918,9 +921,6 @@ function DinerosTab({ round, holes, grossMap, marcasEspMap, holeOrder }: {
                     </Text>
                   );
                 })}
-                <Text style={{ width: 70, textAlign: 'right', fontFamily: Fonts.serif, fontSize: 15, fontWeight: '700', color: color(row.total), fontVariant: ['tabular-nums'] }}>
-                  {fmt(row.total)}
-                </Text>
               </View>
             ))}
           </View>

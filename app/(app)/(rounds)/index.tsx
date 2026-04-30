@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions, Image } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions, Image, Platform } from 'react-native';
 import { Stack, useRouter, Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -99,7 +99,7 @@ export default function RoundsHome() {
           refreshing={isLoading}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 80, gap: 16 }}>
-              <Text style={{ fontFamily: Fonts.serif, fontSize: 48, color: Colors.greenDark + '44' }}>GJ</Text>
+              <Image source={require('@/assets/images/logo-transparent.png')} style={{ width: 100, height: 100, opacity: 0.15 }} />
               <Text style={{ fontFamily: Fonts.serif, fontSize: 22, color: Colors.text }}>Sin partidas</Text>
               <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, fontSize: 15 }}>
                 Registra tu primera ronda de golf

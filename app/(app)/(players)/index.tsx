@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable, TextInput, Modal, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, Modal, ActivityIndicator, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -52,7 +52,8 @@ function PlayerModal({ visible, player, onClose }: { visible: boolean; player: P
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: Colors.background, padding: 24, gap: 20 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={{ backgroundColor: Colors.background, padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 4, borderBottomWidth: 1, borderColor: Colors.border }}>
           <Text style={{ fontFamily: Fonts.serif, fontSize: 22, color: Colors.text }}>
             {isEdit ? 'Editar jugador' : 'Nuevo jugador'}
@@ -115,7 +116,8 @@ function PlayerModal({ visible, player, onClose }: { visible: boolean; player: P
             : <Text style={{ fontFamily: Fonts.mono, color: Colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 }}>GUARDAR</Text>
           }
         </Pressable>
-      </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -164,19 +166,21 @@ export default function PlayersScreen() {
 
       <ScrollView contentInsetAdjustmentBehavior="automatic">
         {/* Page header */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 1, borderColor: Colors.border }}>
-          <View style={{ gap: 4 }}>
-            <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Roster del Foursome</Text>
-            <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
-              {players.length} {players.length === 1 ? 'jugador registrado' : 'jugadores registrados'}
-            </Text>
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 12, borderBottomWidth: 1, borderColor: Colors.border }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ gap: 4, flex: 1, marginRight: 12 }}>
+              <Text style={{ fontFamily: Fonts.serif, fontSize: 28, color: Colors.text }}>Roster del Foursome</Text>
+              <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
+                {players.length} {players.length === 1 ? 'jugador registrado' : 'jugadores registrados'}
+              </Text>
+            </View>
+            <Pressable
+              onPress={openNew}
+              style={{ backgroundColor: Colors.gold, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4 }}
+            >
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, color: Colors.greenDark }}>+ NUEVO JUGADOR</Text>
+            </Pressable>
           </View>
-          <Pressable
-            onPress={openNew}
-            style={{ backgroundColor: Colors.gold, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4 }}
-          >
-            <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, color: Colors.greenDark }}>+ NUEVO JUGADOR</Text>
-          </Pressable>
         </View>
 
         {isLoading ? (
