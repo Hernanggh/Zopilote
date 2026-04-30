@@ -11,7 +11,9 @@ type Round = {
   created_at: string;
   status: 'active' | 'setup' | 'finished';
   start_hole: number;
+  created_by: string;
   courses: { name: string };
+  round_players: { players: { name: string; user_id: string | null } }[];
 };
 
 const STATUS_LABEL: Record<string, string> = { active: 'Activa', setup: 'Setup', finished: 'Cerrada' };
@@ -21,13 +23,16 @@ export default function RoundsHome() {
   const router = useRouter();
   const [deleteTarget, setDeleteTarget] = useState<Round | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const { data: rounds = [], isLoading, refetch } = useQuery<Round[]>({
     queryKey: ['rounds'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id ?? null);
       const { data, error } = await supabase
         .from('rounds')
-        .select('id, date, created_at, status, start_hole, courses(name)')
+        .select('id, date, created_at, status, start_hole, created_by, courses(name), round_players(players(name, user_id))')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []).map(r => ({ ...r, courses: Array.isArray(r.courses) ? r.courses[0] : r.courses })) as Round[];
@@ -111,37 +116,50 @@ export default function RoundsHome() {
               </Link>
             </View>
           }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/${item.id}` as any)}
-              style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}
-            >
-              {/* Color stripe by status */}
-              <View style={{ height: 3, backgroundColor: item.status === 'active' ? Colors.gold : item.status === 'finished' ? Colors.greenDark : Colors.border }} />
-              <View style={{ padding: 14, gap: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Text style={{ fontFamily: Fonts.serif, fontSize: 18, color: Colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>
-                    {roundName(item)}
-                  </Text>
-                  <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: STATUS_COLOR[item.status], fontWeight: '700', paddingTop: 3 }}>
-                    {STATUS_LABEL[item.status].toUpperCase()}
-                  </Text>
+          renderItem={({ item }) => {
+            const isOrganizer = item.created_by === currentUserId;
+            const creatorPlayer = !isOrganizer
+              ? item.round_players?.find(rp => rp.players?.user_id === item.created_by)?.players
+              : null;
+            return (
+              <Pressable
+                onPress={() => router.push(`/${item.id}` as any)}
+                style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}
+              >
+                {/* Color stripe by status */}
+                <View style={{ height: 3, backgroundColor: item.status === 'active' ? Colors.gold : item.status === 'finished' ? Colors.greenDark : Colors.border }} />
+                <View style={{ padding: 14, gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Text style={{ fontFamily: Fonts.serif, fontSize: 18, color: Colors.text, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                      {roundName(item)}
+                    </Text>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: STATUS_COLOR[item.status], fontWeight: '700', paddingTop: 3 }}>
+                      {STATUS_LABEL[item.status].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
+                      {item.courses?.name ?? 'Campo'} · Hoyo {item.start_hole}
+                    </Text>
+                    {isOrganizer && (
+                      <Pressable
+                        onPress={e => { e.stopPropagation(); setDeleteTarget(item); }}
+                        hitSlop={8}
+                        style={{ padding: 4 }}
+                      >
+                        <Text style={{ fontSize: 11, fontFamily: Fonts.mono, color: Colors.textSecondary + '88', letterSpacing: 0.5 }}>×</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  {!isOrganizer && creatorPlayer && (
+                    <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 12, color: Colors.gold }}>
+                      Invitado por {creatorPlayer.name}
+                    </Text>
+                  )}
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary }}>
-                    {item.courses?.name ?? 'Campo'} · Hoyo {item.start_hole}
-                  </Text>
-                  <Pressable
-                    onPress={e => { e.stopPropagation(); setDeleteTarget(item); }}
-                    hitSlop={8}
-                    style={{ padding: 4 }}
-                  >
-                    <Text style={{ fontSize: 11, fontFamily: Fonts.mono, color: Colors.textSecondary + '88', letterSpacing: 0.5 }}>×</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </Pressable>
-          )}
+              </Pressable>
+            );
+          }}
         />
       )}
 

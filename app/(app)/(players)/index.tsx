@@ -5,20 +5,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 
-type Player = { id: string; name: string; default_handicap: number; suffix?: string | null };
+type Player = { id: string; name: string; default_handicap: number; suffix?: string | null; email?: string | null };
 
 function usePlayersMutations() {
   const qc = useQueryClient();
   const add = useMutation({
-    mutationFn: async (p: { name: string; default_handicap: number; suffix?: string | null }) => {
-      const { error } = await supabase.from('players').insert(p);
+    mutationFn: async (p: { name: string; default_handicap: number; suffix?: string | null; email?: string | null }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('players').insert({ ...p, created_by: user?.id });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['players'] }),
   });
   const update = useMutation({
     mutationFn: async (p: Player) => {
-      const { error } = await supabase.from('players').update({ name: p.name, default_handicap: p.default_handicap, suffix: p.suffix ?? null }).eq('id', p.id);
+      const { error } = await supabase.from('players').update({ name: p.name, default_handicap: p.default_handicap, suffix: p.suffix ?? null, email: p.email?.trim().toLowerCase() || null }).eq('id', p.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['players'] }),
@@ -30,6 +31,7 @@ function PlayerModal({ visible, player, onClose }: { visible: boolean; player: P
   const [name, setName] = useState(player?.name ?? '');
   const [hcp, setHcp] = useState(String(player?.default_handicap ?? ''));
   const [suffix, setSuffix] = useState(player?.suffix ?? '');
+  const [email, setEmail] = useState(player?.email ?? '');
   const [err, setErr] = useState('');
   const { add, update } = usePlayersMutations();
 
@@ -42,10 +44,11 @@ function PlayerModal({ visible, player, onClose }: { visible: boolean; player: P
     const h = parseInt(hcp, 10);
     if (isNaN(h) || h < 0) { setErr('Handicap inválido'); return; }
     const suffixVal = suffix.trim() || null;
+    const emailVal = email.trim().toLowerCase() || null;
     if (isEdit) {
-      await update.mutateAsync({ ...player, name: name.trim(), default_handicap: h, suffix: suffixVal });
+      await update.mutateAsync({ ...player, name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
     } else {
-      await add.mutateAsync({ name: name.trim(), default_handicap: h, suffix: suffixVal });
+      await add.mutateAsync({ name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
     }
     onClose();
   }
@@ -106,6 +109,22 @@ function PlayerModal({ visible, player, onClose }: { visible: boolean; player: P
           </View>
         </View>
 
+        <View style={{ gap: 6 }}>
+          <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1.5, color: Colors.textSecondary }}>EMAIL (OPCIONAL)</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="correo@ejemplo.com"
+            placeholderTextColor={Colors.textSecondary + '88'}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={{ backgroundColor: Colors.card, borderRadius: 4, padding: 14, fontSize: 15, fontFamily: Fonts.serif, color: Colors.text, borderWidth: 1, borderColor: Colors.border }}
+          />
+          <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 12, color: Colors.textSecondary }}>
+            Permite al jugador ver la partida en vivo desde su cuenta
+          </Text>
+        </View>
+
         <Pressable
           onPress={save}
           disabled={loading}
@@ -145,7 +164,8 @@ export default function PlayersScreen() {
   const { data: players = [], isLoading } = useQuery<Player[]>({
     queryKey: ['players'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('players').select('*').order('name');
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from('players').select('*').eq('created_by', user?.id).order('name');
       if (error) throw error;
       return data;
     },

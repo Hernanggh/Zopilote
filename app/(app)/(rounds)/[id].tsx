@@ -18,6 +18,7 @@ type RoundData = {
   start_hole: number;
   status: string;
   created_at: string;
+  created_by: string;
   courses: { name: string };
   round_players: { player_id: string; handicap: number; position: number; players: { name: string; suffix?: string | null } }[];
   round_game_config: { game_type: string; active: boolean; bet_amount: number }[];
@@ -35,7 +36,7 @@ function useRoundData(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rounds')
-        .select(`id, course_id, start_hole, status, courses(name),
+        .select(`id, course_id, start_hole, status, created_by, courses(name),
           round_players(player_id, handicap, position, players(name, suffix)),
           round_game_config(game_type, active, bet_amount),
           round_pairings(pair_number, player1_id, player2_id),
@@ -154,13 +155,14 @@ function useSpecialMarcas(roundId: string) {
 
 // ─── Scorecard Tab ────────────────────────────────────────────────────────────
 
-function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonly }: {
+function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonly, isOrganizer }: {
   round: RoundData;
   holes: HoleInfo[];
   grossMap: ScoreMap;
   marcasEspMap: MarcasEspMap;
   holeOrder: number[];
   readonly: boolean;
+  isOrganizer: boolean;
 }) {
   const qc = useQueryClient();
   const inputRefs = useRef<Record<string, TextInput | null>>({});
@@ -260,7 +262,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
       {readonly && (
         <View style={{ backgroundColor: Colors.gold + '22', padding: 10, borderBottomWidth: 1, borderColor: Colors.gold + '55' }}>
           <Text style={{ color: Colors.goldText, fontWeight: '600', fontSize: 12, textAlign: 'center', fontFamily: Fonts.mono, letterSpacing: 0.5 }}>
-            PARTIDA CERRADA · TOCA EDITAR PARA MODIFICAR
+            {isOrganizer ? 'PARTIDA CERRADA · TOCA EDITAR PARA MODIFICAR' : 'MODO ESPECTADOR · SOLO LECTURA'}
           </Text>
         </View>
       )}
@@ -975,10 +977,15 @@ export default function RoundScreen() {
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupErr, setSetupErr] = useState('');
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { data: round, isLoading: loadingRound } = useRoundData(id);
   const { data: holes = [], isLoading: loadingHoles } = useCourseHoles(round?.course_id ?? '');
   const { grossMap } = useScores(id);
   const { marcasEspMap } = useSpecialMarcas(id);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? null));
+  }, []);
 
   // Guard after all hooks — redirect if routing leaked a non-UUID segment here
   if (id === 'players') return <Redirect href="/(app)/(players)" />;
@@ -1001,6 +1008,7 @@ export default function RoundScreen() {
 
   const holeOrder = Array.from({ length: 18 }, (_, i) => i + 1);
   const isActive = round.status === 'active' || round.status === 'setup';
+  const isOrganizer = !currentUserId || round.created_by === currentUserId;
 
   async function doFinish() {
     setSaving(true);
@@ -1128,36 +1136,42 @@ export default function RoundScreen() {
         </View>
         {/* Actions row */}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderTopWidth: 1, borderTopColor: Colors.border + '55' }}>
-          {isActive ? (
-            <>
-              <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
-              </Pressable>
-              <Pressable onPress={() => setConfirmModal('pause')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>PAUSAR</Text>
-              </Pressable>
-              <Pressable onPress={() => setConfirmModal('finish')} style={{ borderWidth: 1, borderColor: Colors.error + '88', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.error, fontFamily: Fonts.mono }}>TERMINAR</Text>
-              </Pressable>
-            </>
+          {isOrganizer ? (
+            isActive ? (
+              <>
+                <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
+                </Pressable>
+                <Pressable onPress={() => setConfirmModal('pause')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>PAUSAR</Text>
+                </Pressable>
+                <Pressable onPress={() => setConfirmModal('finish')} style={{ borderWidth: 1, borderColor: Colors.error + '88', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.error, fontFamily: Fonts.mono }}>TERMINAR</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
+                </Pressable>
+                <Pressable onPress={() => router.replace('/')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>REGRESAR</Text>
+                </Pressable>
+                <Pressable onPress={doEdit} style={{ borderWidth: 1, borderColor: Colors.gold, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>EDITAR</Text>
+                </Pressable>
+              </>
+            )
           ) : (
-            <>
-              <Pressable onPress={openSetup} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>CONFIG</Text>
-              </Pressable>
-              <Pressable onPress={() => router.replace('/')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>REGRESAR</Text>
-              </Pressable>
-              <Pressable onPress={doEdit} style={{ borderWidth: 1, borderColor: Colors.gold, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.goldText, fontFamily: Fonts.mono }}>EDITAR</Text>
-              </Pressable>
-            </>
+            <Pressable onPress={() => router.replace('/')} style={{ borderWidth: 1, borderColor: Colors.border, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Colors.textSecondary, fontFamily: Fonts.mono }}>REGRESAR</Text>
+            </Pressable>
           )}
         </View>
       </View>
 
       {/* Content */}
-      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={Array.from({ length: 18 }, (_, i) => i + 1)} readonly={!isActive} />}
+      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={Array.from({ length: 18 }, (_, i) => i + 1)} readonly={!isActive || !isOrganizer} isOrganizer={isOrganizer} />}
       {activeTab === 'Resultados' && <ResultadosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
       {activeTab === 'Dineros' && <DinerosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
 
