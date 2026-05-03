@@ -159,6 +159,7 @@ function PlayerAvatar({ name }: { name: string }) {
 export default function PlayersScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editPlayer, setEditPlayer] = useState<Player | null>(null);
+  const [modalKey, setModalKey] = useState(0);
   const { width } = useWindowDimensions();
 
   const { data: players = [], isLoading } = useQuery<Player[]>({
@@ -171,8 +172,8 @@ export default function PlayersScreen() {
     },
   });
 
-  function openNew() { setEditPlayer(null); setModalVisible(true); }
-  function openEdit(p: Player) { setEditPlayer(p); setModalVisible(true); }
+  function openNew() { setEditPlayer(null); setModalKey(k => k + 1); setModalVisible(true); }
+  function openEdit(p: Player) { setEditPlayer(p); setModalKey(k => k + 1); setModalVisible(true); }
   function closeModal() { setModalVisible(false); setEditPlayer(null); }
 
   const numCols = width >= 900 ? 3 : width >= 560 ? 2 : 1;
@@ -250,7 +251,7 @@ export default function PlayersScreen() {
         )}
       </ScrollView>
 
-      <PlayerModal key={editPlayer?.id ?? 'new'} visible={modalVisible} player={editPlayer} onClose={closeModal} />
+      <PlayerModal key={modalKey} visible={modalVisible} player={editPlayer} onClose={closeModal} />
     </View>
   );
 }

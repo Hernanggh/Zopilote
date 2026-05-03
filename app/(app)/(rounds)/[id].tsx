@@ -335,7 +335,9 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                   </View>
                   {/* Score inputs */}
                   {players.map(p => {
-                    const ventaja = hole && hole.handicap_rank <= (relHcpMap[p.player_id] ?? 0);
+                    const relHcp = relHcpMap[p.player_id] ?? 0;
+                    const ventaja = hole && hole.handicap_rank <= relHcp;
+                    const dobleVentaja = hole && hole.handicap_rank <= relHcp - 18;
                     const rawVal = getValue(p.player_id, holeNum);
                     const gross = parseInt(rawVal, 10);
                     const sym = !isNaN(gross) && gross > 0 && hole ? scoreSymbol(gross, hole.par) : null;
@@ -343,7 +345,7 @@ function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonl
                     const scoreColor = readonly ? Colors.textSecondary : Colors.text;
                     return (
                       <View key={p.player_id} style={{ width: COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border + '55', paddingVertical: 4 }}>
-                        <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: ventaja ? 'rgba(255, 235, 0, 0.45)' : 'transparent', borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1 }}>
+                        <View style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: dobleVentaja ? 'rgba(255, 140, 0, 0.5)' : ventaja ? 'rgba(255, 235, 0, 0.45)' : 'transparent', borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1 }}>
                           <TextInput
                             ref={ref => { inputRefs.current[`${p.player_id}-${holeNum}`] = ref; }}
                             value={rawVal}
@@ -974,6 +976,7 @@ export default function RoundScreen() {
   const [setupHandicaps, setSetupHandicaps] = useState<Record<string, number>>({});
   const [setupPairings, setSetupPairings] = useState<{ pair_number: number; p1: string; p2: string }[]>([]);
   const [setupBasePair, setSetupBasePair] = useState<{ p1: string; p2: string } | null>(null);
+  const [setupStartHole, setSetupStartHole] = useState<1 | 10>(1);
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupErr, setSetupErr] = useState('');
 
@@ -1006,7 +1009,8 @@ export default function RoundScreen() {
     );
   }
 
-  const holeOrder = Array.from({ length: 18 }, (_, i) => i + 1);
+  const startIdx = round.start_hole === 10 ? 9 : 0;
+  const holeOrder = Array.from({ length: 18 }, (_, i) => ((startIdx + i) % 18) + 1);
   const isActive = round.status === 'active' || round.status === 'setup';
   const isOrganizer = !currentUserId || round.created_by === currentUserId;
 
@@ -1040,6 +1044,7 @@ export default function RoundScreen() {
     setSetupPairings(round.round_pairings.map(p => ({ pair_number: p.pair_number, p1: p.player1_id, p2: p.player2_id })));
     const bp = round.round_base_pair?.[0];
     setSetupBasePair(bp ? { p1: bp.player1_id, p2: bp.player2_id } : null);
+    setSetupStartHole((round.start_hole as 1 | 10) ?? 1);
     setSetupErr('');
     setShowSetup(true);
   }
@@ -1083,6 +1088,9 @@ export default function RoundScreen() {
       );
       if (insBpErr) allErrs.push(insBpErr.message);
     }
+
+    const { error: shErr } = await supabase.from('rounds').update({ start_hole: setupStartHole }).eq('id', id);
+    if (shErr) allErrs.push(shErr.message);
 
     // Always refresh cache so UI reflects whatever was saved
     await qc.invalidateQueries({ queryKey: ['round', id] });
@@ -1192,7 +1200,7 @@ export default function RoundScreen() {
             </View>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 24, paddingBottom: 40 }}>{(() => {
               const sortedPlayers = [...round.round_players].sort((a, b) => a.position - b.position);
-              const playerOpts = sortedPlayers.map(p => ({ label: p.players.name, value: p.player_id }));
+              const playerOpts = sortedPlayers.map(p => ({ label: p.players.suffix ? `${p.players.name} ${p.players.suffix}` : p.players.name, value: p.player_id }));
               const needsPairings = setupGames.parejas?.active;
               const needsBasePair = setupGames.parejas_base?.active || setupGames.parejas_base_medal?.active;
               return (
@@ -1258,7 +1266,7 @@ export default function RoundScreen() {
                                       onPress={() => setSetupPairings(prev => prev.map((p, i) => i === idx ? { ...p, [field]: opt.value } : p))}
                                       style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: disabled && !isSelected ? 0.3 : 1 }}
                                     >
-                                      <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label.split(' ')[0]}</Text>
+                                      <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label}</Text>
                                     </Pressable>
                                   );
                                 })}
@@ -1311,6 +1319,22 @@ export default function RoundScreen() {
                       </View>
                     </View>
                   )}
+
+                  {/* Hoyo de salida */}
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>HOYO DE SALIDA</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {([1, 10] as const).map(h => (
+                        <Pressable
+                          key={h}
+                          onPress={() => setSetupStartHole(h)}
+                          style={{ flex: 1, backgroundColor: setupStartHole === h ? Colors.greenDark : Colors.card, borderRadius: 6, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: setupStartHole === h ? Colors.gold : Colors.border }}
+                        >
+                          <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1, color: setupStartHole === h ? Colors.white : Colors.text }}>HOYO {h}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
 
                   {/* Handicaps */}
                   <View style={{ gap: 8 }}>

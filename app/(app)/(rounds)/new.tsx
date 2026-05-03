@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 
 type Course = { id: string; name: string };
-type Player = { id: string; name: string; default_handicap: number };
-type RoundPlayer = { player_id: string; name: string; handicap: number };
+type Player = { id: string; name: string; default_handicap: number; suffix?: string | null };
+type RoundPlayer = { player_id: string; name: string; suffix?: string | null; handicap: number };
 type GameConfig = { active: boolean; bet_amount: number };
 type GameKey = 'marcas' | 'marcas_esp' | 'individuales' | 'individuales_medal' | 'parejas' | 'parejas_medal' | 'parejas_base' | 'parejas_base_medal' | 'presiones';
 
@@ -151,7 +151,7 @@ export default function NewRound() {
   function addPlayer(p: Player) {
     if (players.length >= 6) { setErrorMsg('Máximo 6 jugadores'); return; }
     setErrorMsg('');
-    setPlayers(prev => [...prev, { player_id: p.id, name: p.name, handicap: p.default_handicap }]);
+    setPlayers(prev => [...prev, { player_id: p.id, name: p.name, suffix: p.suffix, handicap: p.default_handicap }]);
     setShowPlayerPicker(false);
   }
 
@@ -194,6 +194,11 @@ export default function NewRound() {
     if (!courseId) { setErrorMsg('Selecciona un campo'); return; }
     if (players.length < 2) { setErrorMsg('Agrega al menos 2 jugadores'); return; }
     if (games.parejas.active && pairings.length < 2) { setErrorMsg('Necesitas al menos 2 parejas para Juego Parejas'); return; }
+    if (games.parejas.active) {
+      const allIds = pairings.flatMap(p => [p.p1, p.p2]);
+      const hasDups = allIds.length !== new Set(allIds).size;
+      if (hasDups) { setErrorMsg('Hay jugadores repetidos en las parejas'); return; }
+    }
     if ((games.parejas_base.active || games.parejas_base_medal.active) && !basePair) { setErrorMsg('Selecciona la Pareja Base'); return; }
 
     setSaving(true);
@@ -243,7 +248,7 @@ export default function NewRound() {
     }
   }
 
-  const playerOptions = players.map(p => ({ label: p.name, value: p.player_id }));
+  const playerOptions = players.map(p => ({ label: p.suffix ? `${p.name} ${p.suffix}` : p.name, value: p.player_id }));
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
@@ -289,7 +294,7 @@ export default function NewRound() {
         <Section title={`Jugadores (${players.length}/6)`}>
           {players.map((p, i) => (
             <View key={p.player_id} style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Text style={{ fontFamily: Fonts.serif, fontSize: 16, color: Colors.text, flex: 1 }}>{p.name}</Text>
+              <Text style={{ fontFamily: Fonts.serif, fontSize: 16, color: Colors.text, flex: 1 }}>{p.name}{p.suffix ? ` ${p.suffix}` : ''}</Text>
               <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary }}>HCP</Text>
               <TextInput
                 value={String(p.handicap)}
@@ -363,14 +368,13 @@ export default function NewRound() {
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                       {playerOptions.map(opt => {
                         const isSelected = pair[field] === opt.value;
-                        const conflict = (field === 'p1' ? pair.p2 : pair.p1) === opt.value
-                          || pairings.filter((_, i) => i !== idx).some(p => p.p1 === opt.value || p.p2 === opt.value);
+                        const sameSlot = (field === 'p1' ? pair.p2 : pair.p1) === opt.value;
                         return (
                           <Pressable
                             key={opt.value}
-                            disabled={conflict && !isSelected}
+                            disabled={sameSlot}
                             onPress={() => updatePairing(idx, field, opt.value)}
-                            style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: conflict && !isSelected ? 0.3 : 1 }}
+                            style={{ borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: isSelected ? Colors.greenDark : Colors.background, borderWidth: 1, borderColor: isSelected ? Colors.gold : Colors.border, opacity: sameSlot ? 0.3 : 1 }}
                           >
                             <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: isSelected ? Colors.white : Colors.text }}>{opt.label}</Text>
                           </Pressable>
@@ -481,7 +485,7 @@ export default function NewRound() {
                 onPress={() => addPlayer(item)}
                 style={{ backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{item.name}</Text>
+                <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{item.name}{item.suffix ? ` ${item.suffix}` : ''}</Text>
                 <Text style={{ fontFamily: Fonts.mono, fontSize: 11, color: Colors.textSecondary }}>
                   HCP <Text style={{ fontWeight: '700', color: Colors.gold }}>{item.default_handicap}</Text>
                 </Text>
