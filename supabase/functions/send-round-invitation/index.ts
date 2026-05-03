@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
     // Send email to each player with an email
     const sends = (roundPlayers ?? [])
-      .filter((rp: any) => rp.players?.email && rp.players?.user_id !== round.created_by)
+      .filter((rp: any) => rp.players?.email)
       .map(async (rp: any) => {
         const player = rp.players;
         const hoyo = round.start_hole === 10 ? 'Hoyo 10' : 'Hoyo 1';
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
               <tr>
                 <td align="center">
-                  <a href="${Deno.env.get('APP_URL') ?? 'https://zopilote.vercel.app'}/${round.id}"
+                  <a href="${(Deno.env.get('APP_URL') ?? 'https://zopilote.vercel.app').trim()}/${round.id}"
                      style="display:inline-block;background:#1B3A28;color:#C9A84C;font-family:monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:14px 32px;border-radius:4px;border:1px solid #C9A84C;">
                     VER PARTIDA EN VIVO
                   </a>
@@ -124,24 +124,30 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-        await fetch('https://api.resend.com/emails', {
+        const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${resendKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'Zopilote <onboarding@resend.dev>',
+            from: 'Zopilote <noreply@zopilotegolf.com>',
             to: [player.email],
             subject: `${organizerName} te invitó a jugar hoy en Zopilote`,
             html,
           }),
         });
+        if (!res.ok) {
+          const body = await res.text();
+          console.error(`Resend error for ${player.email}: ${res.status} ${body}`);
+        }
       });
 
-    await Promise.allSettled(sends);
+    const results = await Promise.allSettled(sends);
+    const failed = results.filter(r => r.status === 'rejected').length;
+    const sent = results.length - failed;
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ ok: true, sent, failed }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
