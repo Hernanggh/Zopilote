@@ -81,6 +81,11 @@ export default function SettingsIndex() {
           label="Reglas de juegos"
           subtitle="Cómo se calculan las apuestas"
           onPress={() => router.push('/(app)/(settings)/reglas')}
+        />
+        <NavRow
+          label="Política de Privacidad"
+          subtitle="Datos, seguridad y contacto"
+          onPress={() => router.push('/(app)/(settings)/privacy')}
           last
         />
       </View>
