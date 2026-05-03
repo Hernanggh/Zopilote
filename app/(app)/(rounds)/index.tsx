@@ -35,7 +35,7 @@ export default function RoundsHome() {
         .select('id, date, created_at, status, start_hole, created_by, courses(name), round_players(players(name, user_id))')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []).map(r => ({ ...r, courses: Array.isArray(r.courses) ? r.courses[0] : r.courses })) as Round[];
+      return (data ?? []).map(r => ({ ...r, courses: Array.isArray(r.courses) ? r.courses[0] : r.courses })) as unknown as Round[];
     },
   });
 

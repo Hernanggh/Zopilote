@@ -7,7 +7,7 @@ export default function SettingsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: Colors.background },
         headerTintColor: Colors.greenDark,
-        headerTitleStyle: { fontFamily: Fonts.mono, fontWeight: '700', fontSize: 14, letterSpacing: 0.5, color: Colors.text },
+        headerTitleStyle: { fontFamily: Fonts.mono, fontWeight: '700', fontSize: 14, color: Colors.text },
         headerShadowVisible: false,
         headerShown: true,
         headerBackTitle: 'Atrás',
