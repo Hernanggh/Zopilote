@@ -20,7 +20,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const prevSession = useRef<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) supabase.rpc('link_player_for_current_user');
+      setSession(data.session);
+    });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === 'PASSWORD_RECOVERY') {
         isRecovery.current = true;
@@ -30,6 +33,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       }
       if (event === 'USER_UPDATED' || event === 'SIGNED_IN') {
         isRecovery.current = false;
+        supabase.rpc('link_player_for_current_user');
       }
       setSession(s);
     });

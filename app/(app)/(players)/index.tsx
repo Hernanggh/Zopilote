@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 
-type Player = { id: string; name: string; default_handicap: number; suffix?: string | null; email?: string | null };
+type Player = { id: string; name: string; default_handicap: number; suffix?: string | null; email?: string | null; user_id?: string | null };
 
 function usePlayersMutations() {
   const qc = useQueryClient();
@@ -243,6 +243,12 @@ export default function PlayersScreen() {
                     <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary }}>HANDICAP</Text>
                     <Text style={{ fontFamily: Fonts.mono, fontSize: 13, fontWeight: '700', color: Colors.gold }}>{p.default_handicap}</Text>
                   </View>
+                  {!!p.email && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.user_id ? Colors.success : Colors.border }} />
+                      <Text style={{ fontFamily: Fonts.mono, fontSize: 9, color: Colors.textSecondary }} numberOfLines={1}>{p.email}</Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={{ fontFamily: Fonts.mono, fontSize: 16, color: Colors.textSecondary + '66' }}>›</Text>
               </Pressable>
