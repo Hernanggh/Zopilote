@@ -215,6 +215,9 @@ export default function NewRound() {
 
       const roundId = round.id;
 
+      const { error: orgErr } = await supabase.from('round_organizers').insert({ round_id: roundId, user_id: user.id });
+      if (orgErr) throw orgErr;
+
       const { error: rpErr } = await supabase.from('round_players').insert(
         players.map((p, i) => ({ round_id: roundId, player_id: p.player_id, handicap: p.handicap, position: i + 1 }))
       );
