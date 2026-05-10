@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Colors, Fonts } from '@/constants/colors';
+import { APP_VERSION } from '@/constants/version';
 
 function NavRow({ label, subtitle, onPress, last }: {
   label: string; subtitle: string; onPress: () => void; last?: boolean;
@@ -91,9 +92,7 @@ export default function SettingsIndex() {
       </View>
 
       <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary + '66', textAlign: 'center', marginTop: 8 }}>
-        {process.env.EXPO_PUBLIC_COMMIT_HASH
-          ? `build ${process.env.EXPO_PUBLIC_COMMIT_HASH.slice(0, 7)}`
-          : 'local'}
+        {APP_VERSION}
       </Text>
     </ScrollView>
   );
