@@ -25,6 +25,7 @@ export default function RoundScreen() {
   const [setupPairings, setSetupPairings] = useState<{ pair_number: number; p1: string; p2: string }[]>([]);
   const [setupBasePair, setSetupBasePair] = useState<{ p1: string; p2: string } | null>(null);
   const [setupStartHole, setSetupStartHole] = useState<1 | 10>(1);
+  const [setupCoOrgs, setSetupCoOrgs] = useState<string[]>([]);
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupErr, setSetupErr] = useState('');
 
@@ -60,7 +61,8 @@ export default function RoundScreen() {
   const startIdx = round.start_hole === 10 ? 9 : 0;
   const holeOrder = Array.from({ length: 18 }, (_, i) => ((startIdx + i) % 18) + 1);
   const isActive = round.status === 'active' || round.status === 'setup';
-  const isOrganizer = !currentUserId || round.created_by === currentUserId;
+  const isOrganizer = !currentUserId || round.round_organizers.some(o => o.user_id === currentUserId);
+  const isCreator = currentUserId === round.created_by;
 
   async function doFinish() {
     setSaving(true);
@@ -93,6 +95,7 @@ export default function RoundScreen() {
     const bp = round.round_base_pair?.[0];
     setSetupBasePair(bp ? { p1: bp.player1_id, p2: bp.player2_id } : null);
     setSetupStartHole((round.start_hole as 1 | 10) ?? 1);
+    setSetupCoOrgs(round.round_organizers.filter(o => o.user_id !== round.created_by).map(o => o.user_id));
     setSetupErr('');
     setShowSetup(true);
   }
@@ -139,6 +142,17 @@ export default function RoundScreen() {
 
     const { error: shErr } = await supabase.from('rounds').update({ start_hole: setupStartHole }).eq('id', id);
     if (shErr) allErrs.push(shErr.message);
+
+    // Co-organizadores: borrar los que ya no están, insertar los nuevos
+    const { error: delOrgErr } = await supabase.from('round_organizers')
+      .delete().eq('round_id', id).neq('user_id', round.created_by);
+    if (delOrgErr) { allErrs.push(delOrgErr.message); }
+    else if (setupCoOrgs.length > 0) {
+      const { error: insOrgErr } = await supabase.from('round_organizers').insert(
+        setupCoOrgs.map(uid => ({ round_id: id, user_id: uid }))
+      );
+      if (insOrgErr) allErrs.push(insOrgErr.message);
+    }
 
     // Always refresh cache so UI reflects whatever was saved
     await qc.invalidateQueries({ queryKey: ['round', id] });
@@ -383,6 +397,34 @@ export default function RoundScreen() {
                       ))}
                     </View>
                   </View>
+
+                  {/* Co-organizadores — solo visible para el creador */}
+                  {isCreator && (() => {
+                    const linkedPlayers = sortedPlayers.filter(p => p.players.user_id && p.players.user_id !== round.created_by);
+                    if (linkedPlayers.length === 0) return null;
+                    return (
+                      <View style={{ gap: 8 }}>
+                        <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>CO-ORGANIZADORES</Text>
+                        {linkedPlayers.map(p => {
+                          const uid = p.players.user_id!;
+                          const isCoOrg = setupCoOrgs.includes(uid);
+                          return (
+                            <View key={p.player_id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: isCoOrg ? Colors.gold + '66' : Colors.border, gap: 10 }}>
+                              <Switch
+                                value={isCoOrg}
+                                onValueChange={v => setSetupCoOrgs(prev => v ? [...prev, uid] : prev.filter(u => u !== uid))}
+                                trackColor={{ false: Colors.border, true: Colors.greenDark }}
+                                thumbColor={isCoOrg ? Colors.gold : Colors.white}
+                              />
+                              <Text style={{ fontFamily: Fonts.serif, flex: 1, fontSize: 15, color: Colors.text }}>
+                                {p.players.suffix ? `${p.players.name} ${p.players.suffix}` : p.players.name}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })()}
 
                   {/* Handicaps */}
                   <View style={{ gap: 8 }}>

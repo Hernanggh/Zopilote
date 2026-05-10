@@ -14,7 +14,8 @@ export function useRoundData(id: string) {
           round_players(player_id, handicap, position, players(name, suffix, user_id)),
           round_game_config(game_type, active, bet_amount),
           round_pairings(pair_number, player1_id, player2_id),
-          round_base_pair(player1_id, player2_id)`)
+          round_base_pair(player1_id, player2_id),
+          round_organizers(user_id)`)
         .eq('id', id)
         .single();
       if (error) throw error;
