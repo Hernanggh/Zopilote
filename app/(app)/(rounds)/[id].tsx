@@ -227,7 +227,7 @@ export default function RoundScreen() {
       </View>
 
       {/* Content */}
-      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={Array.from({ length: 18 }, (_, i) => i + 1)} readonly={!isActive || !isOrganizer} isOrganizer={isOrganizer} />}
+      {activeTab === 'Scorecard' && <ScorecardTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={Array.from({ length: 18 }, (_, i) => i + 1)} readonly={!isActive || !isOrganizer} isOrganizer={isOrganizer} currentUserId={currentUserId} />}
       {activeTab === 'Resultados' && <ResultadosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
       {activeTab === 'Dineros' && <DinerosTab round={round} holes={holes} grossMap={grossMap} marcasEspMap={marcasEspMap} holeOrder={holeOrder} />}
 

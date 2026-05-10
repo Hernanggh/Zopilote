@@ -6,7 +6,7 @@ import { Colors, Fonts } from '@/constants/colors';
 import { calcRelativeHandicaps, type HoleInfo } from '@/lib/calculations';
 import { type RoundData, type ScoreMap, type MarcasEspMap } from './_roundTypes';
 
-export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonly, isOrganizer }: {
+export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, readonly, isOrganizer, currentUserId }: {
   round: RoundData;
   holes: HoleInfo[];
   grossMap: ScoreMap;
@@ -14,6 +14,7 @@ export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, 
   holeOrder: number[];
   readonly: boolean;
   isOrganizer: boolean;
+  currentUserId?: string | null;
 }) {
   const qc = useQueryClient();
   const inputRefs = useRef<Record<string, TextInput | null>>({});
@@ -108,6 +109,19 @@ export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, 
 
   const FIXED_BG = Colors.creamDeep;
 
+  // Score vs par del jugador activo
+  const myPlayer = currentUserId ? players.find(p => p.players.user_id === currentUserId) : null;
+  const myScore = myPlayer
+    ? holeOrder.reduce((sum, h) => {
+        const gross = grossMap[myPlayer.player_id]?.[h] ?? 0;
+        const par = holeMap[h]?.par ?? 0;
+        return gross > 0 && par > 0 ? sum + (gross - par) : sum;
+      }, 0)
+    : null;
+  const myHolesPlayed = myPlayer
+    ? holeOrder.filter(h => (grossMap[myPlayer.player_id]?.[h] ?? 0) > 0).length
+    : 0;
+
   return (
     <ScrollView style={{ flex: 1, overscrollBehaviorX: 'contain' } as any} contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }} contentInsetAdjustmentBehavior="automatic">
       {readonly && (
@@ -127,7 +141,14 @@ export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, 
       <View style={{ margin: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, maxWidth: screenWidth - 24 }}>
         {/* Card header */}
         <View style={{ backgroundColor: Colors.greenDark, paddingHorizontal: 14, paddingVertical: 10, borderTopLeftRadius: 8, borderTopRightRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ color: Colors.white, fontSize: 11, fontFamily: Fonts.mono, letterSpacing: 2 }}>SCORECARD</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ color: Colors.white, fontSize: 11, fontFamily: Fonts.mono, letterSpacing: 2 }}>SCORECARD</Text>
+            {myPlayer && myHolesPlayed > 0 && myScore !== null && (
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 14, fontWeight: '700', color: Colors.gold }}>
+                {myScore > 0 ? `+${myScore}` : myScore === 0 ? 'E' : String(myScore)}
+              </Text>
+            )}
+          </View>
           <Text style={{ color: Colors.gold, fontSize: 10, fontFamily: Fonts.mono, letterSpacing: 1.5 }}>MARCAS</Text>
         </View>
 
@@ -182,7 +203,7 @@ export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, 
                     <Text style={{ fontFamily: Fonts.serif, fontSize: 14, color: Colors.textSecondary }}>{hole?.par ?? ''}</Text>
                   </View>
                   <View style={{ width: HOLE_COL_W, alignItems: 'center', justifyContent: 'center', backgroundColor: FIXED_BG, paddingVertical: 7, borderTopWidth: 1, borderTopColor: Colors.borderDeep + '44' }}>
-                    <Text style={{ fontFamily: Fonts.serif, fontWeight: '700', fontSize: 14, color: Colors.text }}>{holeNum}</Text>
+                    <Text style={{ fontFamily: Fonts.serif, fontWeight: '700', fontSize: 14, color: Colors.error }}>{holeNum}</Text>
                   </View>
                   {/* Score inputs */}
                   {players.map(p => {

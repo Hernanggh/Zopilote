@@ -6,7 +6,7 @@ export type RoundData = {
   created_at: string;
   created_by: string;
   courses: { name: string };
-  round_players: { player_id: string; handicap: number; position: number; players: { name: string; suffix?: string | null } }[];
+  round_players: { player_id: string; handicap: number; position: number; players: { name: string; suffix?: string | null; user_id?: string | null } }[];
   round_game_config: { game_type: string; active: boolean; bet_amount: number }[];
   round_pairings: { pair_number: number; player1_id: string; player2_id: string }[];
   round_base_pair: { player1_id: string; player2_id: string }[];
