@@ -89,6 +89,12 @@ export default function SettingsIndex() {
           last
         />
       </View>
+
+      <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary + '66', textAlign: 'center', marginTop: 8 }}>
+        {process.env.EXPO_PUBLIC_COMMIT_HASH
+          ? `build ${process.env.EXPO_PUBLIC_COMMIT_HASH.slice(0, 7)}`
+          : 'local'}
+      </Text>
     </ScrollView>
   );
 }

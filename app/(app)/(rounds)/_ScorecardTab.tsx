@@ -68,7 +68,13 @@ export function ScorecardTab({ round, holes, grossMap, marcasEspMap, holeOrder, 
 
   const handleBlur = useCallback(async (pid: string, hole: number) => {
     const val = localScores[pid]?.[hole];
-    if (val === undefined || val === 0) return;
+    if (val === undefined) return;
+    if (val === 0) {
+      const { error } = await supabase.from('scores').delete()
+        .eq('round_id', round.id).eq('player_id', pid).eq('hole_number', hole);
+      if (error) setSaveErr(error.message);
+      return;
+    }
     const { error } = await supabase.from('scores').upsert(
       { round_id: round.id, player_id: pid, hole_number: hole, gross_score: val },
       { onConflict: 'round_id,player_id,hole_number' }

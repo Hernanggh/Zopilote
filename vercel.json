@@ -1,4 +1,6 @@
 {
+  "buildCommand": "EXPO_PUBLIC_COMMIT_HASH=$VERCEL_GIT_COMMIT_SHA npx expo export -p web",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
   ],
