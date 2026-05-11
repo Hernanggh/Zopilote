@@ -56,6 +56,7 @@ export default function NewRound() {
 
   const [courseId, setCourseId] = useState('');
   const [startHole, setStartHole] = useState<1 | 10>(1);
+  const [official, setOfficial] = useState(true);
   const [players, setPlayers] = useState<RoundPlayer[]>([]);
   const [games, setGames] = useState<Record<GameKey, GameConfig>>({
     marcas:             { active: true,  bet_amount: 10  },
@@ -208,7 +209,7 @@ export default function NewRound() {
 
       const { data: round, error: roundErr } = await supabase
         .from('rounds')
-        .insert({ course_id: courseId, start_hole: startHole, created_by: user.id, status: 'active', date: new Date().toLocaleDateString('en-CA') })
+        .insert({ course_id: courseId, start_hole: startHole, created_by: user.id, status: 'active', official, date: new Date().toLocaleDateString('en-CA') })
         .select('id')
         .single();
       if (roundErr) throw roundErr;
@@ -290,6 +291,19 @@ export default function NewRound() {
                 </Text>
               </Pressable>
             ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: official ? Colors.gold + '55' : Colors.border, paddingHorizontal: 16, paddingVertical: 12, gap: 12 }}>
+            <Switch
+              value={official}
+              onValueChange={setOfficial}
+              trackColor={{ false: Colors.border, true: Colors.greenDark }}
+              thumbColor={official ? Colors.gold : Colors.white}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: Fonts.serif, fontSize: 15, color: Colors.text }}>Partida Oficial</Text>
+              <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 11, color: Colors.textSecondary }}>Cuenta para el ranking de temporada</Text>
+            </View>
           </View>
         </Section>
 

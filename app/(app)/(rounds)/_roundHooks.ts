@@ -10,7 +10,7 @@ export function useRoundData(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rounds')
-        .select(`id, course_id, start_hole, status, created_by, courses(name),
+        .select(`id, course_id, start_hole, status, official, created_by, courses(name),
           round_players(player_id, handicap, position, players(name, suffix, user_id)),
           round_game_config(game_type, active, bet_amount),
           round_pairings(pair_number, player1_id, player2_id),

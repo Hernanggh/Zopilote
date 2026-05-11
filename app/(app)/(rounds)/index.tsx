@@ -46,7 +46,7 @@ export default function RoundsHome() {
     dateGroups[r.date].push(r.id);
   });
   function roundName(item: Round): string {
-    const dateStr = new Date(item.date + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    const dateStr = new Date(item.date + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const group = dateGroups[item.date] ?? [];
     if (group.length <= 1) return dateStr;
     const idx = group.indexOf(item.id) + 1;

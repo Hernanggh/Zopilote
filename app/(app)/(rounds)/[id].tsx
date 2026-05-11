@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 import { useRoundData, useCourseHoles, useScores, useSpecialMarcas } from './_roundHooks';
 import { ALL_GAME_KEYS, GAME_LABELS_SETUP, TABS } from './_roundConstants';
+import { computeDineros } from './_calcDineros';
 import { ScorecardTab } from './_ScorecardTab';
 import { ResultadosTab } from './_ResultadosTab';
 import { DinerosTab } from './_DinerosTab';
@@ -39,6 +40,26 @@ export default function RoundScreen() {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? null));
   }, []);
 
+  // Backfill: guardar resultados de partidas terminadas que no tienen datos aún
+  useEffect(() => {
+    if (round?.status !== 'finished' || !round.official || !holes.length) return;
+    const r = round;
+    supabase.from('round_player_results')
+      .select('player_id', { count: 'exact', head: true })
+      .eq('round_id', r.id)
+      .then(({ count }) => {
+        if ((count ?? 0) === 0) {
+          const startIdx = r.start_hole === 10 ? 9 : 0;
+          const ho = Array.from({ length: 18 }, (_, i) => ((startIdx + i) % 18) + 1);
+          const rows = computeDineros(r, holes, grossMap, marcasEspMap, ho);
+          supabase.from('round_player_results').upsert(
+            rows.map(row => ({ round_id: r.id, player_id: row.player_id, balance: row.total, marcas: row.marcas, marcas_esp: row.marcas_esp, individuales: row.individuales, ind_medal: row.individuales_medal, parejas: row.parejas, parejas_medal: row.parejas_medal, parejas_base: row.parejas_base, pb_medal: row.parejas_base_medal, presiones: row.presiones })),
+            { onConflict: 'round_id,player_id' }
+          );
+        }
+      });
+  }, [round?.id, round?.status, holes.length]);
+
   // Guard after all hooks — redirect if routing leaked a non-UUID segment here
   if (id === 'players') return <Redirect href="/(app)/(players)" />;
 
@@ -67,6 +88,13 @@ export default function RoundScreen() {
   async function doFinish() {
     setSaving(true);
     await supabase.from('rounds').update({ status: 'finished' }).eq('id', id);
+    if (round?.official && holes.length) {
+      const rows = computeDineros(round!, holes, grossMap, marcasEspMap, holeOrder);
+      await supabase.from('round_player_results').upsert(
+        rows.map(r => ({ round_id: round.id, player_id: r.player_id, balance: r.total, marcas: r.marcas, marcas_esp: r.marcas_esp, individuales: r.individuales, ind_medal: r.individuales_medal, parejas: r.parejas, parejas_medal: r.parejas_medal, parejas_base: r.parejas_base, pb_medal: r.parejas_base_medal, presiones: r.presiones })),
+        { onConflict: 'round_id,player_id' }
+      );
+    }
     setSaving(false);
     setConfirmModal(null);
     router.replace('/');
@@ -145,7 +173,7 @@ export default function RoundScreen() {
 
     // Co-organizadores: borrar los que ya no están, insertar los nuevos
     const { error: delOrgErr } = await supabase.from('round_organizers')
-      .delete().eq('round_id', id).neq('user_id', round.created_by);
+      .delete().eq('round_id', id).neq('user_id', round!.created_by);
     if (delOrgErr) { allErrs.push(delOrgErr.message); }
     else if (setupCoOrgs.length > 0) {
       const { error: insOrgErr } = await supabase.from('round_organizers').insert(

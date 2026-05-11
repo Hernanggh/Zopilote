@@ -3,6 +3,7 @@ export type RoundData = {
   course_id: string;
   start_hole: number;
   status: string;
+  official: boolean;
   created_at: string;
   created_by: string;
   courses: { name: string };
