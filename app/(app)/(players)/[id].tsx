@@ -23,8 +23,9 @@ export default function PlayerHistorial() {
         .from('players')
         .select('id, name, suffix, default_handicap, email, user_id')
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('Jugador no encontrado');
       return data as { id: string; name: string; suffix: string | null; default_handicap: number; email: string | null; user_id: string | null };
     },
     enabled: !!id,
@@ -145,7 +146,7 @@ export default function PlayerHistorial() {
             rounds.map(r => (
               <Pressable
                 key={r.round_id}
-                onPress={() => router.push(`/${r.round_id}`)}
+                onPress={() => router.push({ pathname: '/(app)/(rounds)/[id]', params: { id: r.round_id } } as any)}
                 style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}
               >
                 <View style={{ flex: 1, gap: 3 }}>

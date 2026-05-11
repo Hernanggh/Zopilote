@@ -36,7 +36,8 @@ function usePlayersMutations() {
   const qc = useQueryClient();
   const add = useMutation({
     mutationFn: async (p: { name: string; default_handicap: number; suffix?: string | null; email?: string | null }) => {
-      const { error } = await supabase.from('players').insert(p);
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('players').insert({ ...p, created_by: user?.id ?? null });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['players'] }),
@@ -77,12 +78,16 @@ function PlayerModal({ visible, player, onClose, favSet, onToggleFav, onHistoria
     if (isNaN(h) || h < 0) { setErr('Handicap inválido'); return; }
     const suffixVal = suffix.trim() || null;
     const emailVal = email.trim().toLowerCase() || null;
-    if (isEdit) {
-      await update.mutateAsync({ ...player, name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
-    } else {
-      await add.mutateAsync({ name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
+    try {
+      if (isEdit) {
+        await update.mutateAsync({ ...player, name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
+      } else {
+        await add.mutateAsync({ name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
+      }
+      onClose();
+    } catch (e: any) {
+      setErr(e?.message ?? 'Error al guardar');
     }
-    onClose();
   }
 
   return (
