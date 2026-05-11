@@ -229,21 +229,15 @@ function GolfFlag({ color = Colors.gold, size = 16 }: { color?: string; size?: n
 
 function PlayerAvatar({ name, isFav }: { name: string; isFav?: boolean }) {
   const initial = name.trim().charAt(0).toUpperCase();
+  const accent = isFav ? Colors.gold : '#A8A8A0';
   return (
-    <View style={{ position: 'relative' }}>
-      <View style={{
-        width: 52, height: 52, borderRadius: 26,
-        backgroundColor: Colors.greenDark,
-        alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1.5, borderColor: isFav ? Colors.gold : Colors.gold + '55',
-      }}>
-        <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.gold, lineHeight: 24 }}>{initial}</Text>
-      </View>
-      {isFav && (
-        <View style={{ position: 'absolute', top: -4, right: -5 }}>
-          <GolfFlag size={12} />
-        </View>
-      )}
+    <View style={{
+      width: 52, height: 52, borderRadius: 26,
+      backgroundColor: Colors.greenDark,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1.5, borderColor: accent,
+    }}>
+      <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: accent, lineHeight: 24 }}>{initial}</Text>
     </View>
   );
 }
