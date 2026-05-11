@@ -57,7 +57,7 @@ export function ResultadosTab({ round, holes, grossMap, marcasEspMap, holeOrder 
     : [];
 
   const COL_W = 54;
-  const ROW_H_W = 56;
+  const ROW_H_W = 72;
   const IND_ROW_H_W = 72;
 
   const SECTIONS = [
