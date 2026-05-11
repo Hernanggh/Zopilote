@@ -123,7 +123,7 @@ export default function RoundsHome() {
               : null;
             return (
               <Pressable
-                onPress={() => router.push(`/${item.id}` as any)}
+                onPress={() => router.push(`/partida/${item.id}` as any)}
                 style={{ backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' }}
               >
                 {/* Color stripe by status */}

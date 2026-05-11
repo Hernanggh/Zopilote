@@ -4,12 +4,12 @@ import { Stack, useLocalSearchParams, Redirect, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
-import { useRoundData, useCourseHoles, useScores, useSpecialMarcas } from './_roundHooks';
-import { ALL_GAME_KEYS, GAME_LABELS_SETUP, TABS } from './_roundConstants';
-import { computeDineros } from './_calcDineros';
-import { ScorecardTab } from './_ScorecardTab';
-import { ResultadosTab } from './_ResultadosTab';
-import { DinerosTab } from './_DinerosTab';
+import { useRoundData, useCourseHoles, useScores, useSpecialMarcas } from '../_roundHooks';
+import { ALL_GAME_KEYS, GAME_LABELS_SETUP, TABS } from '../_roundConstants';
+import { computeDineros } from '../_calcDineros';
+import { ScorecardTab } from '../_ScorecardTab';
+import { ResultadosTab } from '../_ResultadosTab';
+import { DinerosTab } from '../_DinerosTab';
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 

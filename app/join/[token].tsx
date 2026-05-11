@@ -22,7 +22,7 @@ export default function JoinScreen() {
       if (dbErr || !data) { setError('El link de invitación no es válido.'); return; }
       if (new Date(data.expires_at) < new Date()) { setError('El link de invitación ha expirado.'); return; }
 
-      router.replace(`/${data.round_id}` as any);
+      router.replace(`/partida/${data.round_id}` as any);
     }
 
     processToken();

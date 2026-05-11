@@ -15,7 +15,7 @@ export default function RoundsLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'Zopilote' }} />
       <Stack.Screen name="new" options={{ title: 'Nueva Partida', headerBackTitle: 'Atrás' }} />
-      <Stack.Screen name="[id]" options={{ title: 'Partida', headerBackTitle: 'Atrás' }} />
+      <Stack.Screen name="partida/[id]" options={{ title: 'Partida', headerBackTitle: 'Atrás' }} />
     </Stack>
   );
 }
