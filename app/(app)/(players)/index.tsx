@@ -350,6 +350,54 @@ function usePlayerBalances() {
   });
 }
 
+function useBirdieCount() {
+  const year = new Date().getFullYear();
+  return useQuery<Record<string, number>>({
+    queryKey: ['birdie_counts', year],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_birdie_counts', { p_year: year });
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((r: { player_id: string; birdies: number }) => {
+        map[r.player_id] = Number(r.birdies);
+      });
+      return map;
+    },
+  });
+}
+
+function BirdieRankingView({ players, birdies }: { players: Player[]; birdies: Record<string, number> }) {
+  const ranked = players
+    .filter(p => birdies[p.id] !== undefined)
+    .sort((a, b) => (birdies[b.id] ?? 0) - (birdies[a.id] ?? 0));
+
+  const NAME_W = 130;
+  const NUM_W = 32;
+  const COL_W = 72;
+
+  if (ranked.length === 0) return null;
+
+  return (
+    <View style={{ margin: 12, marginTop: 4, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
+      <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 10, paddingVertical: 10, alignItems: 'center' }}>
+        <View style={{ width: NUM_W }} />
+        <Text style={{ width: NAME_W, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
+        <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>BIRDIES</Text>
+      </View>
+      {ranked.map((p, i) => {
+        const name = p.suffix ? `${p.name} ${p.suffix}` : p.name;
+        return (
+          <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
+            <Text style={{ width: NUM_W, fontFamily: Fonts.mono, fontSize: 12, color: Colors.textSecondary, textAlign: 'center' }}>#{i + 1}</Text>
+            <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }} numberOfLines={1}>{name}</Text>
+            <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.success }}>{birdies[p.id]}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function PlayersScreen() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
@@ -359,6 +407,7 @@ export default function PlayersScreen() {
   const { width } = useWindowDimensions();
   const { favSet, toggleFavorite } = useFavorites();
   const { data: balances = {} } = usePlayerBalances();
+  const { data: birdies = {} } = useBirdieCount();
 
   const { data: players = [], isLoading } = useQuery<Player[]>({
     queryKey: ['players'],
@@ -458,7 +507,10 @@ export default function PlayersScreen() {
         {isLoading ? (
           <ActivityIndicator style={{ marginTop: 60 }} color={Colors.greenDark} />
         ) : view === 'ranking' ? (
-          <RankingView players={players} balances={balances} />
+          <>
+            <RankingView players={players} balances={balances} />
+            <BirdieRankingView players={players} birdies={birdies} />
+          </>
         ) : players.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 80, gap: 10 }}>
             <Text style={{ fontFamily: Fonts.serif, fontSize: 22, color: Colors.text }}>Sin jugadores</Text>
