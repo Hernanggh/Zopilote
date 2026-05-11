@@ -91,6 +91,7 @@ export default function PlayerHistorial() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <ScrollView contentInsetAdjustmentBehavior="automatic">
+      <View style={{ maxWidth: 600, width: '100%', alignSelf: 'flex-start' }}>
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderColor: Colors.border, gap: 4 }}>
           <Pressable onPress={() => router.back()} style={{ marginBottom: 8 }}>
@@ -166,6 +167,7 @@ export default function PlayerHistorial() {
             ))
           )}
         </View>
+      </View>
       </ScrollView>
     </View>
   );
