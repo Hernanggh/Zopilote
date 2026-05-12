@@ -44,20 +44,22 @@ export default function RoundScreen() {
   useEffect(() => {
     if (round?.status !== 'finished' || !round.official || !holes.length) return;
     const r = round;
-    supabase.from('round_player_results')
-      .select('player_id', { count: 'exact', head: true })
-      .eq('round_id', r.id)
-      .then(({ count }) => {
-        if ((count ?? 0) === 0) {
-          const startIdx = r.start_hole === 10 ? 9 : 0;
-          const ho = Array.from({ length: 18 }, (_, i) => ((startIdx + i) % 18) + 1);
-          const rows = computeDineros(r, holes, grossMap, marcasEspMap, ho);
-          supabase.from('round_player_results').upsert(
-            rows.map(row => ({ round_id: r.id, player_id: row.player_id, balance: row.total, marcas: row.marcas, marcas_esp: row.marcas_esp, individuales: row.individuales, ind_medal: row.individuales_medal, parejas: row.parejas, parejas_medal: row.parejas_medal, parejas_base: row.parejas_base, pb_medal: row.parejas_base_medal, presiones: row.presiones })),
-            { onConflict: 'round_id,player_id' }
-          );
-        }
-      });
+    async function backfill() {
+      const { count } = await supabase.from('round_player_results')
+        .select('player_id', { count: 'exact', head: true })
+        .eq('round_id', r.id);
+      if ((count ?? 0) === 0) {
+        const startIdx = r.start_hole === 10 ? 9 : 0;
+        const ho = Array.from({ length: 18 }, (_, i) => ((startIdx + i) % 18) + 1);
+        const rows = computeDineros(r, holes, grossMap, marcasEspMap, ho);
+        const { error } = await supabase.from('round_player_results').upsert(
+          rows.map(row => ({ round_id: r.id, player_id: row.player_id, balance: row.total, marcas: row.marcas, marcas_esp: row.marcas_esp, individuales: row.individuales, ind_medal: row.individuales_medal, parejas: row.parejas, parejas_medal: row.parejas_medal, parejas_base: row.parejas_base, pb_medal: row.parejas_base_medal, presiones: row.presiones })),
+          { onConflict: 'round_id,player_id' }
+        );
+        if (error) console.error('[backfill] error guardando resultados:', error.message);
+      }
+    }
+    backfill();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round?.id, round?.status, holes.length]);
 
