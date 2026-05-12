@@ -26,7 +26,7 @@ export default function JoinScreen() {
     }
 
     processToken();
-  }, [token]);
+  }, [token, router]);
 
   if (error) {
     return (

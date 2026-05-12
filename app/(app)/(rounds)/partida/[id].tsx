@@ -58,6 +58,7 @@ export default function RoundScreen() {
           );
         }
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [round?.id, round?.status, holes.length]);
 
   // Guard after all hooks — redirect if routing leaked a non-UUID segment here

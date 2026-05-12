@@ -22,7 +22,7 @@ export default function PrivacyScreen() {
       </View>
 
       <Section title="1. INFORMACIÓN GENERAL">
-        Zopilote Golf ("la Aplicación") es operada por sus desarrolladores. Esta Política de Privacidad describe cómo se recopila, utiliza y protege la información personal de los usuarios. Al utilizar la Aplicación, usted acepta las prácticas descritas en este documento.
+        {'Zopilote Golf ("la Aplicación") es operada por sus desarrolladores. Esta Política de Privacidad describe cómo se recopila, utiliza y protege la información personal de los usuarios. Al utilizar la Aplicación, usted acepta las prácticas descritas en este documento.'}
       </Section>
 
       <Section title="2. DATOS QUE RECOPILAMOS">

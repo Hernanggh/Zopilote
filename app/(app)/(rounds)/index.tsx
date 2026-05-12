@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions, Image, Platform } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, useWindowDimensions, Image } from 'react-native';
 import { Stack, useRouter, Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
@@ -185,7 +185,7 @@ export default function RoundsHome() {
           <View style={{ backgroundColor: Colors.card, borderRadius: 6, padding: 24, marginHorizontal: 32, gap: 14, borderWidth: 1, borderColor: Colors.border, borderTopWidth: 3, borderTopColor: Colors.error }}>
             <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.text }}>¿Borrar partida?</Text>
             <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 14, color: Colors.textSecondary, lineHeight: 20 }}>
-              Se eliminará "{roundName(deleteTarget)}" y todos sus scores.
+              {`Se eliminará "${roundName(deleteTarget)}" y todos sus scores.`}
             </Text>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable

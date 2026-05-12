@@ -36,9 +36,11 @@ export default function Campos() {
     if (!confirmed) return;
     const { error } = await supabase.from('courses').delete().eq('id', course.id);
     if (error) {
-      Platform.OS === 'web'
-        ? window.alert(`Error: ${error.message}`)
-        : Alert.alert('Error', error.message);
+      if (Platform.OS === 'web') {
+        window.alert(`Error: ${error.message}`);
+      } else {
+        Alert.alert('Error', error.message);
+      }
       return;
     }
     qc.invalidateQueries({ queryKey: ['courses'] });

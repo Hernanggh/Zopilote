@@ -45,7 +45,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (session === undefined) return;
@@ -84,7 +84,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         navigate();
       }
     }
-  }, [session, segments]);
+  }, [session, segments, router]);
 
   if (showSplash) {
     return (
