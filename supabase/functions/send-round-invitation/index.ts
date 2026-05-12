@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
               <tr>
                 <td align="center">
-                  <a href="${(Deno.env.get('APP_URL') ?? 'https://zopilote.vercel.app').trim()}/${round.id}"
+                  <a href="${(Deno.env.get('APP_URL') ?? 'https://zopilote.vercel.app').trim()}/partida/${round.id}"
                      style="display:inline-block;background:#1B3A28;color:#C9A84C;font-family:monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-decoration:none;padding:14px 32px;border-radius:4px;border:1px solid #C9A84C;">
                     VER PARTIDA EN VIVO
                   </a>

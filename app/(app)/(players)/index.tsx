@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 
-type Player = { id: string; name: string; default_handicap: number; suffix?: string | null; email?: string | null; user_id?: string | null };
+type Contact = { id: string; player_id: string; display_name: string; handicap: number; suffix?: string | null; email?: string | null; user_id?: string | null };
 
 function useFavorites() {
   const qc = useQueryClient();
@@ -32,44 +32,98 @@ function useFavorites() {
   return { favSet, toggleFavorite };
 }
 
-function usePlayersMutations() {
+function useContactsMutations() {
   const qc = useQueryClient();
+
   const add = useMutation({
-    mutationFn: async (p: { name: string; default_handicap: number; suffix?: string | null; email?: string | null }) => {
+    mutationFn: async (p: { display_name: string; handicap: number; suffix?: string | null; email?: string | null }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('players').insert({ ...p, created_by: user?.id ?? null });
-      if (error) throw error;
+      const emailVal = p.email?.trim().toLowerCase() || null;
+
+      // Find or create player anchor
+      let playerId: string;
+      if (emailVal) {
+        const { data: existing } = await supabase
+          .from('players')
+          .select('id')
+          .eq('email', emailVal)
+          .maybeSingle();
+        if (existing) {
+          playerId = existing.id;
+        } else {
+          const { data: newPlayer, error: pe } = await supabase
+            .from('players')
+            .insert({ name: p.display_name.trim(), suffix: p.suffix ?? null, default_handicap: p.handicap, email: emailVal, created_by: user?.id ?? null })
+            .select('id')
+            .single();
+          if (pe) throw pe;
+          playerId = newPlayer.id;
+        }
+      } else {
+        const { data: newPlayer, error: pe } = await supabase
+          .from('players')
+          .insert({ name: p.display_name.trim(), suffix: p.suffix ?? null, default_handicap: p.handicap, email: null, created_by: user?.id ?? null })
+          .select('id')
+          .single();
+        if (pe) throw pe;
+        playerId = newPlayer.id;
+      }
+
+      const { data: existingContact } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('owner_user_id', user!.id)
+        .eq('player_id', playerId)
+        .maybeSingle();
+      if (existingContact) throw new Error('Este jugador ya está en tu Roster');
+
+      const { error: ce } = await supabase.from('contacts').insert({
+        owner_user_id: user!.id,
+        player_id: playerId,
+        display_name: p.display_name.trim(),
+        suffix: p.suffix ?? null,
+        handicap: p.handicap,
+        email: emailVal,
+      });
+      if (ce) throw ce;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['players'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   });
+
   const update = useMutation({
-    mutationFn: async (p: Player) => {
-      const { error } = await supabase.from('players').update({ name: p.name, default_handicap: p.default_handicap, suffix: p.suffix ?? null, email: p.email?.trim().toLowerCase() || null }).eq('id', p.id);
+    mutationFn: async (c: Contact) => {
+      const { error } = await supabase.from('contacts').update({
+        display_name: c.display_name,
+        suffix: c.suffix ?? null,
+        handicap: c.handicap,
+        email: c.email?.trim().toLowerCase() || null,
+      }).eq('id', c.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['players'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   });
+
   return { add, update };
 }
 
-function PlayerModal({ visible, player, onClose, favSet, onToggleFav, onHistorial }: {
+function PlayerModal({ visible, contact, onClose, favSet, onToggleFav, onHistorial }: {
   visible: boolean;
-  player: Player | null;
+  contact: Contact | null;
   onClose: () => void;
   favSet: Set<string>;
-  onToggleFav: (id: string) => void;
-  onHistorial: (id: string) => void;
+  onToggleFav: (playerId: string) => void;
+  onHistorial: (playerId: string) => void;
 }) {
-  const [name, setName] = useState(player?.name ?? '');
-  const [hcp, setHcp] = useState(String(player?.default_handicap ?? ''));
-  const [suffix, setSuffix] = useState(player?.suffix ?? '');
-  const [email, setEmail] = useState(player?.email ?? '');
+  const [name, setName] = useState(contact?.display_name ?? '');
+  const [hcp, setHcp] = useState(String(contact?.handicap ?? ''));
+  const [suffix, setSuffix] = useState(contact?.suffix ?? '');
+  const [email, setEmail] = useState(contact?.email ?? '');
   const [err, setErr] = useState('');
-  const { add, update } = usePlayersMutations();
+  const { add, update } = useContactsMutations();
 
-  const isEdit = player !== null;
+  const isEdit = contact !== null;
   const loading = add.isPending || update.isPending;
-  const isFav = isEdit && favSet.has(player.id);
+  const isFav = isEdit && favSet.has(contact.player_id);
 
   async function save() {
     setErr('');
@@ -80,9 +134,9 @@ function PlayerModal({ visible, player, onClose, favSet, onToggleFav, onHistoria
     const emailVal = email.trim().toLowerCase() || null;
     try {
       if (isEdit) {
-        await update.mutateAsync({ ...player, name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
+        await update.mutateAsync({ ...contact, display_name: name.trim(), handicap: h, suffix: suffixVal, email: emailVal });
       } else {
-        await add.mutateAsync({ name: name.trim(), default_handicap: h, suffix: suffixVal, email: emailVal });
+        await add.mutateAsync({ display_name: name.trim(), handicap: h, suffix: suffixVal, email: emailVal });
       }
       onClose();
     } catch (e: any) {
@@ -164,7 +218,7 @@ function PlayerModal({ visible, player, onClose, favSet, onToggleFav, onHistoria
 
         {isEdit && (
           <Pressable
-            onPress={() => onToggleFav(player.id)}
+            onPress={() => onToggleFav(contact.player_id)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: isFav ? Colors.gold + '22' : Colors.card, borderRadius: 6, borderWidth: 1, borderColor: isFav ? Colors.gold : Colors.border, padding: 14 }}
           >
             <GolfFlag size={18} color={isFav ? Colors.gold : Colors.border} />
@@ -192,7 +246,7 @@ function PlayerModal({ visible, player, onClose, favSet, onToggleFav, onHistoria
 
         {isEdit && (
           <Pressable
-            onPress={() => { onClose(); onHistorial(player.id); }}
+            onPress={() => { onClose(); onHistorial(contact.player_id); }}
             style={{ alignItems: 'center', paddingVertical: 8 }}
           >
             <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary }}>VER HISTORIAL ›</Text>
@@ -210,9 +264,7 @@ function GolfFlag({ color = Colors.gold, size = 16 }: { color?: string; size?: n
   const flagW = Math.round(size * 0.75);
   return (
     <View style={{ width: size, height: poleH }}>
-      {/* Pole */}
       <View style={{ position: 'absolute', left: 0, top: 0, width: 2, height: poleH, backgroundColor: color, borderRadius: 1 }} />
-      {/* Pennant — right-pointing triangle via border trick */}
       <View style={{
         position: 'absolute', left: 2, top: 0,
         width: 0, height: 0,
@@ -252,11 +304,10 @@ function SectionLabel({ title }: { title: string }) {
 
 type BalanceEntry = { balance: number; marcas: number; individuales: number; parejas: number; parejas_base: number; presiones: number; rounds: number };
 
-function RankingView({ players, balances }: { players: Player[]; balances: Record<string, BalanceEntry> }) {
-  const { width } = useWindowDimensions();
-  const ranked = players
-    .filter(p => balances[p.id] !== undefined)
-    .sort((a, b) => (balances[b.id]?.balance ?? 0) - (balances[a.id]?.balance ?? 0));
+function RankingView({ contacts, balances }: { contacts: Contact[]; balances: Record<string, BalanceEntry> }) {
+  const ranked = contacts
+    .filter(c => balances[c.player_id] !== undefined)
+    .sort((a, b) => (balances[b.player_id]?.balance ?? 0) - (balances[a.player_id]?.balance ?? 0));
 
   function fmt(n: number) { return (n >= 0 ? '+' : '') + `$${Math.abs(n).toLocaleString('es-MX')}`; }
   function col(n: number) { return n > 0 ? Colors.success : n < 0 ? Colors.error : Colors.textSecondary; }
@@ -281,7 +332,6 @@ function RankingView({ players, balances }: { players: Player[]; balances: Recor
     <View style={{ margin: 12, borderRadius: 6, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border }}>
       <View style={{ overflowX: 'auto' } as any}>
         <View style={{ minWidth: 'max-content' } as any}>
-          {/* Header */}
           <View style={{ flexDirection: 'row', backgroundColor: Colors.greenDark, paddingHorizontal: 10, paddingVertical: 10, alignItems: 'center' }}>
             <View style={{ width: NUM_W }} />
             <Text style={{ width: NAME_W, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
@@ -293,12 +343,11 @@ function RankingView({ players, balances }: { players: Player[]; balances: Recor
             <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>P.BASE</Text>
             <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>PRES.</Text>
           </View>
-          {/* Rows */}
-          {ranked.map((p, i) => {
-            const b = balances[p.id];
-            const name = p.suffix ? `${p.name} ${p.suffix}` : p.name;
+          {ranked.map((c, i) => {
+            const b = balances[c.player_id];
+            const name = c.suffix ? `${c.display_name} ${c.suffix}` : c.display_name;
             return (
-              <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
+              <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
                 <Text style={{ width: NUM_W, fontFamily: Fonts.mono, fontSize: 12, color: Colors.textSecondary, textAlign: 'center' }}>#{i + 1}</Text>
                 <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }} numberOfLines={1}>{name}</Text>
                 <Text style={{ width: RND_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 13, color: Colors.textSecondary }}>{b.rounds}</Text>
@@ -366,10 +415,10 @@ function useBirdieCount() {
   });
 }
 
-function BirdieRankingView({ players, birdies }: { players: Player[]; birdies: Record<string, number> }) {
-  const ranked = players
-    .filter(p => birdies[p.id] !== undefined)
-    .sort((a, b) => (birdies[b.id] ?? 0) - (birdies[a.id] ?? 0));
+function BirdieRankingView({ contacts, birdies }: { contacts: Contact[]; birdies: Record<string, number> }) {
+  const ranked = contacts
+    .filter(c => birdies[c.player_id] !== undefined)
+    .sort((a, b) => (birdies[b.player_id] ?? 0) - (birdies[a.player_id] ?? 0));
 
   const NAME_W = 130;
   const NUM_W = 32;
@@ -384,13 +433,13 @@ function BirdieRankingView({ players, birdies }: { players: Player[]; birdies: R
         <Text style={{ width: NAME_W, fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.white + 'BB' }}>JUGADOR</Text>
         <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.gold }}>BIRDIES</Text>
       </View>
-      {ranked.map((p, i) => {
-        const name = p.suffix ? `${p.name} ${p.suffix}` : p.name;
+      {ranked.map((c, i) => {
+        const name = c.suffix ? `${c.display_name} ${c.suffix}` : c.display_name;
         return (
-          <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
+          <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 12, backgroundColor: Colors.card, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: Colors.border + '55' }}>
             <Text style={{ width: NUM_W, fontFamily: Fonts.mono, fontSize: 12, color: Colors.textSecondary, textAlign: 'center' }}>#{i + 1}</Text>
             <Text style={{ width: NAME_W, fontFamily: Fonts.serif, fontSize: 14, color: Colors.text }} numberOfLines={1}>{name}</Text>
-            <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.success }}>{birdies[p.id]}</Text>
+            <Text style={{ width: COL_W, textAlign: 'center', fontFamily: Fonts.mono, fontSize: 15, fontWeight: '700', color: Colors.success }}>{birdies[c.player_id]}</Text>
           </View>
         );
       })}
@@ -401,7 +450,7 @@ function BirdieRankingView({ players, birdies }: { players: Player[]; birdies: R
 export default function PlayersScreen() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
-  const [editPlayer, setEditPlayer] = useState<Player | null>(null);
+  const [editContact, setEditContact] = useState<Contact | null>(null);
   const [modalKey, setModalKey] = useState(0);
   const [view, setView] = useState<'roster' | 'ranking'>('roster');
   const { width } = useWindowDimensions();
@@ -409,34 +458,45 @@ export default function PlayersScreen() {
   const { data: balances = {} } = usePlayerBalances();
   const { data: birdies = {} } = useBirdieCount();
 
-  const { data: players = [], isLoading } = useQuery<Player[]>({
-    queryKey: ['players'],
+  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
+    queryKey: ['contacts'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('players').select('*').order('name');
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, player_id, display_name, suffix, handicap, email, players(user_id)')
+        .order('display_name');
       if (error) throw error;
-      return data;
+      return (data as any[]).map(c => ({
+        id: c.id,
+        player_id: c.player_id,
+        display_name: c.display_name,
+        suffix: c.suffix,
+        handicap: c.handicap,
+        email: c.email,
+        user_id: c.players?.user_id ?? null,
+      }));
     },
   });
 
-  function openNew() { setEditPlayer(null); setModalKey(k => k + 1); setModalVisible(true); }
-  function openEdit(p: Player) { setEditPlayer(p); setModalKey(k => k + 1); setModalVisible(true); }
-  function closeModal() { setModalVisible(false); setEditPlayer(null); }
+  function openNew() { setEditContact(null); setModalKey(k => k + 1); setModalVisible(true); }
+  function openEdit(c: Contact) { setEditContact(c); setModalKey(k => k + 1); setModalVisible(true); }
+  function closeModal() { setModalVisible(false); setEditContact(null); }
 
   const numCols = width >= 900 ? 3 : width >= 560 ? 2 : 1;
   const gap = 12;
   const pad = 16;
   const itemWidth = (width - pad * 2 - gap * (numCols - 1)) / numCols;
 
-  const favorites = players.filter(p => favSet.has(p.id));
-  const others = players.filter(p => !favSet.has(p.id));
+  const favorites = contacts.filter(c => favSet.has(c.player_id));
+  const others = contacts.filter(c => !favSet.has(c.player_id));
   const hasSections = favorites.length > 0;
 
-  function renderCard(p: Player) {
-    const isFav = favSet.has(p.id);
+  function renderCard(c: Contact) {
+    const isFav = favSet.has(c.player_id);
     return (
       <Pressable
-        key={p.id}
-        onPress={() => openEdit(p)}
+        key={c.id}
+        onPress={() => openEdit(c)}
         style={{
           width: itemWidth,
           backgroundColor: Colors.card,
@@ -449,22 +509,22 @@ export default function PlayersScreen() {
           gap: 14,
         }}
       >
-        <PlayerAvatar name={p.name} isFav={isFav} />
+        <PlayerAvatar name={c.display_name} isFav={isFav} />
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }} numberOfLines={1}>{p.name}</Text>
-            {!!p.suffix && (
-              <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.textSecondary, fontStyle: 'italic' }}>{p.suffix}</Text>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }} numberOfLines={1}>{c.display_name}</Text>
+            {!!c.suffix && (
+              <Text style={{ fontFamily: Fonts.serif, fontSize: 13, color: Colors.textSecondary, fontStyle: 'italic' }}>{c.suffix}</Text>
             )}
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
             <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary }}>HANDICAP</Text>
-            <Text style={{ fontFamily: Fonts.mono, fontSize: 13, fontWeight: '700', color: Colors.gold }}>{p.default_handicap}</Text>
+            <Text style={{ fontFamily: Fonts.mono, fontSize: 13, fontWeight: '700', color: Colors.gold }}>{c.handicap}</Text>
           </View>
-          {!!p.email && (
+          {!!c.email && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.user_id ? Colors.success : Colors.border }} />
-              <Text style={{ fontFamily: Fonts.mono, fontSize: 9, color: Colors.textSecondary }} numberOfLines={1}>{p.email}</Text>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.user_id ? Colors.success : Colors.border }} />
+              <Text style={{ fontFamily: Fonts.mono, fontSize: 9, color: Colors.textSecondary }} numberOfLines={1}>{c.email}</Text>
             </View>
           )}
         </View>
@@ -488,7 +548,6 @@ export default function PlayersScreen() {
               <Text style={{ fontFamily: Fonts.mono, fontSize: 11, fontWeight: '700', letterSpacing: 1.2, color: Colors.greenDark }}>+ NUEVO JUGADOR</Text>
             </Pressable>
           </View>
-          {/* Toggle ROSTER | RANKING */}
           <View style={{ flexDirection: 'row', backgroundColor: Colors.card, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', alignSelf: 'flex-start' }}>
             {(['roster', 'ranking'] as const).map(v => (
               <Pressable
@@ -508,10 +567,10 @@ export default function PlayersScreen() {
           <ActivityIndicator style={{ marginTop: 60 }} color={Colors.greenDark} />
         ) : view === 'ranking' ? (
           <>
-            <RankingView players={players} balances={balances} />
-            <BirdieRankingView players={players} birdies={birdies} />
+            <RankingView contacts={contacts} balances={balances} />
+            <BirdieRankingView contacts={contacts} birdies={birdies} />
           </>
-        ) : players.length === 0 ? (
+        ) : contacts.length === 0 ? (
           <View style={{ alignItems: 'center', marginTop: 80, gap: 10 }}>
             <Text style={{ fontFamily: Fonts.serif, fontSize: 22, color: Colors.text }}>Sin jugadores</Text>
             <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', color: Colors.textSecondary, fontSize: 14 }}>
@@ -523,12 +582,12 @@ export default function PlayersScreen() {
             {hasSections && <SectionLabel title="MI FOURSOME" />}
             {hasSections && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-                {favorites.map(p => renderCard(p))}
+                {favorites.map(c => renderCard(c))}
               </View>
             )}
             {hasSections && others.length > 0 && <SectionLabel title="OTROS JUGADORES" />}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-              {others.map(p => renderCard(p))}
+              {others.map(c => renderCard(c))}
             </View>
           </View>
         )}
@@ -537,11 +596,11 @@ export default function PlayersScreen() {
       <PlayerModal
         key={modalKey}
         visible={modalVisible}
-        player={editPlayer}
+        contact={editContact}
         onClose={closeModal}
         favSet={favSet}
         onToggleFav={toggleFavorite}
-        onHistorial={(id) => router.push(`/(app)/(players)/${id}`)}
+        onHistorial={(playerId) => router.push(`/(app)/(players)/${playerId}`)}
       />
     </View>
   );

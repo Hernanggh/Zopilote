@@ -11,7 +11,7 @@ export function useRoundData(id: string) {
       const { data, error } = await supabase
         .from('rounds')
         .select(`id, course_id, start_hole, status, official, created_by, courses(name),
-          round_players(player_id, handicap, position, players(name, suffix, user_id)),
+          round_players(player_id, contact_id, handicap, position, display_name_snapshot, players(name, suffix, user_id), contacts(display_name, suffix)),
           round_game_config(game_type, active, bet_amount),
           round_pairings(pair_number, player1_id, player2_id),
           round_base_pair(player1_id, player2_id),
@@ -24,6 +24,22 @@ export function useRoundData(id: string) {
       if (d.round_base_pair && !Array.isArray(d.round_base_pair)) {
         (d as any).round_base_pair = [d.round_base_pair];
       }
+      // Resolve display name: contacts (owner) → display_name_snapshot → players.name
+      (d as any).round_players = (d as any).round_players.map((rp: any) => {
+        let displayName: string;
+        let displaySuffix: string | null;
+        if (rp.contacts?.display_name) {
+          displayName = rp.contacts.display_name;
+          displaySuffix = rp.contacts.suffix ?? rp.players?.suffix ?? null;
+        } else if (rp.display_name_snapshot) {
+          displayName = rp.display_name_snapshot;
+          displaySuffix = null;
+        } else {
+          displayName = rp.players?.name ?? '';
+          displaySuffix = rp.players?.suffix ?? null;
+        }
+        return { ...rp, players: { ...rp.players, name: displayName, suffix: displaySuffix } };
+      });
       return d;
     },
     enabled: !!id && id !== 'players',

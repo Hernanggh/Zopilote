@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { Colors, Fonts } from '@/constants/colors';
 
 type Course = { id: string; name: string };
-type Player = { id: string; name: string; default_handicap: number; suffix?: string | null };
-type RoundPlayer = { player_id: string; name: string; suffix?: string | null; handicap: number };
+type ContactPicker = { id: string; player_id: string; display_name: string; handicap: number; suffix?: string | null };
+type RoundPlayer = { player_id: string; contact_id: string; name: string; suffix?: string | null; handicap: number };
 type GameConfig = { active: boolean; bet_amount: number };
 type GameKey = 'marcas' | 'marcas_esp' | 'individuales' | 'individuales_medal' | 'parejas' | 'parejas_medal' | 'parejas_base' | 'parejas_base_medal' | 'presiones';
 
@@ -83,12 +83,15 @@ export default function NewRound() {
     },
   });
 
-  const { data: allPlayers = [] } = useQuery<Player[]>({
-    queryKey: ['players'],
+  const { data: allPlayers = [] } = useQuery<ContactPicker[]>({
+    queryKey: ['contacts'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('players').select('*').order('name');
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, player_id, display_name, suffix, handicap')
+        .order('display_name');
       if (error) throw error;
-      return data;
+      return data as ContactPicker[];
     },
   });
 
@@ -147,12 +150,12 @@ export default function NewRound() {
   });
 
   const courseName = courses.find(c => c.id === courseId)?.name ?? 'Seleccionar campo';
-  const availablePlayers = allPlayers.filter(p => !players.find(rp => rp.player_id === p.id));
+  const availablePlayers = allPlayers.filter(p => !players.find(rp => rp.player_id === p.player_id));
 
-  function addPlayer(p: Player) {
+  function addPlayer(p: ContactPicker) {
     if (players.length >= 6) { setErrorMsg('Máximo 6 jugadores'); return; }
     setErrorMsg('');
-    setPlayers(prev => [...prev, { player_id: p.id, name: p.name, suffix: p.suffix, handicap: p.default_handicap }]);
+    setPlayers(prev => [...prev, { player_id: p.player_id, contact_id: p.id, name: p.display_name, suffix: p.suffix, handicap: p.handicap }]);
     setShowPlayerPicker(false);
   }
 
@@ -220,7 +223,14 @@ export default function NewRound() {
       if (orgErr) throw orgErr;
 
       const { error: rpErr } = await supabase.from('round_players').insert(
-        players.map((p, i) => ({ round_id: roundId, player_id: p.player_id, handicap: p.handicap, position: i + 1 }))
+        players.map((p, i) => ({
+          round_id: roundId,
+          player_id: p.player_id,
+          contact_id: p.contact_id,
+          handicap: p.handicap,
+          position: i + 1,
+          display_name_snapshot: p.suffix ? `${p.name} ${p.suffix}` : p.name,
+        }))
       );
       if (rpErr) throw rpErr;
 
@@ -502,9 +512,9 @@ export default function NewRound() {
                 onPress={() => addPlayer(item)}
                 style={{ backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{item.name}{item.suffix ? ` ${item.suffix}` : ''}</Text>
+                <Text style={{ fontFamily: Fonts.serif, fontSize: 17, color: Colors.text }}>{item.display_name}{item.suffix ? ` ${item.suffix}` : ''}</Text>
                 <Text style={{ fontFamily: Fonts.mono, fontSize: 11, color: Colors.textSecondary }}>
-                  HCP <Text style={{ fontWeight: '700', color: Colors.gold }}>{item.default_handicap}</Text>
+                  HCP <Text style={{ fontWeight: '700', color: Colors.gold }}>{item.handicap}</Text>
                 </Text>
               </Pressable>
             )}

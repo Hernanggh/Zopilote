@@ -459,7 +459,7 @@ export default function RoundScreen() {
                     <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1.5, color: Colors.textSecondary }}>HANDICAPS</Text>
                     {sortedPlayers.map((p, i) => (
                       <View key={p.player_id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border }}>
-                        <Text style={{ fontFamily: Fonts.serif, flex: 1, fontSize: 16, color: Colors.text }}>{p.players.name}</Text>
+                        <Text style={{ fontFamily: Fonts.serif, flex: 1, fontSize: 16, color: Colors.text }}>{p.players.suffix ? `${p.players.name} ${p.players.suffix}` : p.players.name}</Text>
                         <Text style={{ fontFamily: Fonts.mono, fontSize: 9, letterSpacing: 1, color: Colors.textSecondary, marginRight: 8 }}>HCP</Text>
                         <TextInput
                           value={String(setupHandicaps[p.player_id] ?? p.handicap)}
