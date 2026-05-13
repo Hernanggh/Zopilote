@@ -22,9 +22,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       if (data.session) {
-        await supabase.rpc('link_player_for_current_user');
-        queryClient.invalidateQueries({ queryKey: ['players'] });
-        queryClient.invalidateQueries({ queryKey: ['rounds'] });
+        try {
+          await supabase.rpc('link_player_for_current_user');
+          queryClient.invalidateQueries({ queryKey: ['players'] });
+          queryClient.invalidateQueries({ queryKey: ['rounds'] });
+        } catch { /* no bloquea la sesión si el RPC falla */ }
       }
       setSession(data.session);
     });
@@ -37,15 +39,18 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       }
       if (event === 'USER_UPDATED' || event === 'SIGNED_IN') {
         isRecovery.current = false;
-        supabase.rpc('link_player_for_current_user').then(() => {
-          queryClient.invalidateQueries({ queryKey: ['players'] });
-          queryClient.invalidateQueries({ queryKey: ['rounds'] });
-        });
+        supabase.rpc('link_player_for_current_user')
+          .then(() => {
+            queryClient.invalidateQueries({ queryKey: ['players'] });
+            queryClient.invalidateQueries({ queryKey: ['rounds'] });
+          })
+          .catch(() => { /* non-blocking */ });
       }
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
-  }, [router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (session === undefined) return;

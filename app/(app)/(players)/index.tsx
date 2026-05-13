@@ -92,12 +92,31 @@ function useContactsMutations() {
 
   const update = useMutation({
     mutationFn: async (c: Contact) => {
-      const { error } = await supabase.from('contacts').update({
+      const emailVal = c.email?.trim().toLowerCase() || null;
+      const updatePayload: Record<string, unknown> = {
         display_name: c.display_name,
         suffix: c.suffix ?? null,
         handicap: c.handicap,
-        email: c.email?.trim().toLowerCase() || null,
-      }).eq('id', c.id);
+        email: emailVal,
+      };
+
+      if (emailVal) {
+        const { data: existing } = await supabase
+          .from('players')
+          .select('id')
+          .eq('email', emailVal)
+          .maybeSingle();
+        if (existing && existing.id !== c.player_id) {
+          // Existe un player con ese email — re-ligar el contacto
+          updatePayload.player_id = existing.id;
+        } else if (!existing && c.player_id) {
+          // No existe player con ese email — actualizar el email del player actual
+          // para que link_player_for_current_user lo encuentre cuando el usuario refresque
+          await supabase.from('players').update({ email: emailVal }).eq('id', c.player_id);
+        }
+      }
+
+      const { error } = await supabase.from('contacts').update(updatePayload).eq('id', c.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
