@@ -103,13 +103,23 @@ function useContactsMutations() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   });
 
-  return { add, update };
+  const deleteContact = useMutation({
+    mutationFn: async (contact: Contact) => {
+      await supabase.from('player_favorites').delete().eq('player_id', contact.player_id);
+      const { error } = await supabase.from('contacts').delete().eq('id', contact.id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  });
+
+  return { add, update, deleteContact };
 }
 
-function PlayerModal({ visible, contact, onClose, favSet, onToggleFav, onHistorial }: {
+function PlayerModal({ visible, contact, onClose, onDelete, favSet, onToggleFav, onHistorial }: {
   visible: boolean;
   contact: Contact | null;
   onClose: () => void;
+  onDelete: (contact: Contact) => void;
   favSet: Set<string>;
   onToggleFav: (playerId: string) => void;
   onHistorial: (playerId: string) => void;
@@ -119,6 +129,7 @@ function PlayerModal({ visible, contact, onClose, favSet, onToggleFav, onHistori
   const [suffix, setSuffix] = useState(contact?.suffix ?? '');
   const [email, setEmail] = useState(contact?.email ?? '');
   const [err, setErr] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const { add, update } = useContactsMutations();
 
   const isEdit = contact !== null;
@@ -251,6 +262,38 @@ function PlayerModal({ visible, contact, onClose, favSet, onToggleFav, onHistori
           >
             <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.textSecondary }}>VER HISTORIAL ›</Text>
           </Pressable>
+        )}
+
+        {isEdit && !confirmDelete && (
+          <Pressable
+            onPress={() => setConfirmDelete(true)}
+            style={{ alignItems: 'center', paddingVertical: 8 }}
+          >
+            <Text style={{ fontFamily: Fonts.mono, fontSize: 10, letterSpacing: 1, color: Colors.error + 'AA' }}>ELIMINAR DEL ROSTER</Text>
+          </Pressable>
+        )}
+
+        {isEdit && confirmDelete && (
+          <View style={{ backgroundColor: Colors.error + '12', borderRadius: 6, borderWidth: 1, borderColor: Colors.error + '44', padding: 16, gap: 12 }}>
+            <Text style={{ fontFamily: Fonts.serif, fontSize: 16, color: Colors.text }}>¿Eliminar a {contact.display_name} del Roster?</Text>
+            <Text style={{ fontFamily: Fonts.fraunces, fontStyle: 'italic', fontSize: 13, color: Colors.textSecondary, lineHeight: 18 }}>
+              Las partidas y el historial no se borran, pero si lo vuelves a agregar sin email no se ligará con sus datos anteriores y puede afectar el ranking.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={() => setConfirmDelete(false)}
+                style={{ flex: 1, padding: 12, borderRadius: 4, alignItems: 'center', borderWidth: 1, borderColor: Colors.border }}
+              >
+                <Text style={{ fontFamily: Fonts.mono, fontWeight: '700', fontSize: 11, letterSpacing: 1, color: Colors.textSecondary }}>CANCELAR</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onDelete(contact)}
+                style={{ flex: 1, padding: 12, borderRadius: 4, alignItems: 'center', backgroundColor: Colors.error, borderWidth: 1, borderColor: Colors.error }}
+              >
+                <Text style={{ fontFamily: Fonts.mono, fontWeight: '700', fontSize: 11, letterSpacing: 1, color: Colors.white }}>ELIMINAR</Text>
+              </Pressable>
+            </View>
+          </View>
         )}
       </ScrollView>
       </KeyboardAvoidingView>
@@ -478,9 +521,15 @@ export default function PlayersScreen() {
     },
   });
 
+  const { deleteContact } = useContactsMutations();
+
   function openNew() { setEditContact(null); setModalKey(k => k + 1); setModalVisible(true); }
   function openEdit(c: Contact) { setEditContact(c); setModalKey(k => k + 1); setModalVisible(true); }
   function closeModal() { setModalVisible(false); setEditContact(null); }
+  async function handleDeleteContact(contact: Contact) {
+    closeModal();
+    await deleteContact.mutateAsync(contact);
+  }
 
   const numCols = width >= 900 ? 3 : width >= 560 ? 2 : 1;
   const gap = 12;
@@ -598,6 +647,7 @@ export default function PlayersScreen() {
         visible={modalVisible}
         contact={editContact}
         onClose={closeModal}
+        onDelete={handleDeleteContact}
         favSet={favSet}
         onToggleFav={toggleFavorite}
         onHistorial={(playerId) => router.push(`/(app)/(players)/${playerId}`)}
