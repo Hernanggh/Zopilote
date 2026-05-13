@@ -5,6 +5,21 @@ import { type HoleInfo, type ScoreEntry } from '@/lib/calculations';
 import { type RoundData, type ScoreMap, type MarcasEspMap } from './_roundTypes';
 
 export function useRoundData(id: string) {
+  const qc = useQueryClient();
+  const isValid = !!id && id !== 'players';
+
+  useEffect(() => {
+    if (!isValid) return;
+    const uid = Math.random().toString(36).slice(2, 7);
+    const channel = supabase
+      .channel(`round-players-${id}-${uid}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'round_players', filter: `round_id=eq.${id}` },
+        () => qc.invalidateQueries({ queryKey: ['round', id] })
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, qc, isValid]);
+
   return useQuery<RoundData>({
     queryKey: ['round', id],
     queryFn: async () => {
@@ -42,7 +57,7 @@ export function useRoundData(id: string) {
       });
       return d;
     },
-    enabled: !!id && id !== 'players',
+    enabled: isValid,
   });
 }
 
