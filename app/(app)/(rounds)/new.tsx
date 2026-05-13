@@ -253,7 +253,17 @@ export default function NewRound() {
         if (bpErr) throw bpErr;
       }
 
-      supabase.functions.invoke('send-round-invitation', { body: { roundId } }).catch(() => {});
+      let inviteToken: string | null = null;
+      try {
+        const { data: invite } = await supabase
+          .from('round_invitations')
+          .insert({ round_id: roundId, created_by: user.id })
+          .select('token')
+          .single();
+        inviteToken = invite?.token ?? null;
+      } catch { /* fallback: el email usará link directo */ }
+
+      supabase.functions.invoke('send-round-invitation', { body: { roundId, token: inviteToken } }).catch(() => {});
       router.replace(`/partida/${roundId}`);
     } catch (e: any) {
       setErrorMsg(e.message ?? 'Error al crear la partida');
